@@ -37,8 +37,12 @@ func main() {
 		// Database mode
 		dbPath := os.Getenv("DB_PATH")
 		if dbPath == "" {
-			// Default database path: same directory as Claude projects
-			dbPath = filepath.Join(filepath.Dir(claudeDir), "ccloganalysis.db")
+			// Default database path: same directory as executable
+			exePath, err := os.Executable()
+			if err != nil {
+				log.Fatalf("Failed to get executable path: %v", err)
+			}
+			dbPath = filepath.Join(filepath.Dir(exePath), "ccloganalysis.db")
 		}
 
 		database, err := db.NewDB(dbPath)
