@@ -9,6 +9,13 @@
 go.work
 /bin/
 /dist/
+/server
+
+# SQLite database files
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
 
 # Node.js / React
 node_modules/
