@@ -5,11 +5,14 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 
 	"github.com/a-tak/ccloganalysis/internal/api"
 	"github.com/a-tak/ccloganalysis/internal/db"
 	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/watcher"
 )
 
 func main() {
@@ -49,6 +52,19 @@ func main() {
 	p := parser.NewParser(claudeDir)
 	service := api.NewDatabaseSessionService(database, p)
 
+	// Initialize file watcher
+	watcherConfig := watcher.LoadWatcherConfig()
+	var fileWatcher *watcher.FileWatcher
+
+	if watcherConfig.Enabled && p != nil {
+		fileWatcher = watcher.NewFileWatcher(database, p, watcherConfig)
+		if fileWatcher != nil {
+			fileWatcher.Start()
+			fmt.Printf("File watcher enabled (interval: %s, debounce: %s)\n",
+				watcherConfig.Interval, watcherConfig.Debounce)
+		}
+	}
+
 	fmt.Printf("Claude Code Log Analysis Server\n")
 	fmt.Printf("================================\n")
 	fmt.Printf("Claude projects directory: %s\n", claudeDir)
@@ -59,7 +75,33 @@ func main() {
 	handler := api.NewHandler(service)
 	router := handler.Routes()
 
-	if err := http.ListenAndServe(":"+port, router); err != nil {
-		log.Fatal(err)
+	// Setup graceful shutdown
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	// Start HTTP server in goroutine
+	serverErrors := make(chan error, 1)
+	go func() {
+		if err := http.ListenAndServe(":"+port, router); err != nil && err != http.ErrServerClosed {
+			serverErrors <- err
+		}
+	}()
+
+	// Wait for shutdown signal or server error
+	select {
+	case err := <-serverErrors:
+		log.Fatalf("Server error: %v", err)
+	case <-sigCh:
+		fmt.Println("\nShutting down gracefully...")
+
+		// Stop file watcher
+		if fileWatcher != nil {
+			fileWatcher.Stop()
+		}
+
+		// Close database
+		database.Close()
+
+		fmt.Println("Shutdown complete")
 	}
 }

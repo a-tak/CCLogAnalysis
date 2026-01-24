@@ -213,6 +213,20 @@ make help
 | `CLAUDE_PROJECTS_DIR` | Claudeプロジェクトディレクトリ | `~/.claude/projects` | `/custom/path/to/projects` |
 | `ENABLE_CORS` | CORS有効化（開発用） | `false` | `true` |
 
+### ファイル監視設定
+
+| 変数名 | 説明 | デフォルト値 | 範囲 | 例 |
+|--------|------|--------------|------|-----|
+| `ENABLE_FILE_WATCH` | ファイル監視機能の有効化 | `false` | `true`/`false` | `true` |
+| `FILE_WATCH_INTERVAL` | スキャン間隔（秒） | `15` | 5～3600 | `30` |
+| `FILE_WATCH_DEBOUNCE` | デバウンス時間（秒） | `5` | 1～60 | `10` |
+
+**ファイル監視機能について**:
+- 新しいログファイル（`.jsonl`）が追加されると、自動的にデータベースに同期されます
+- スキャン間隔で定期的にファイルシステムをチェックします
+- デバウンス時間により、短時間の連続同期を抑制して負荷を軽減します
+- デフォルトは無効です（既存動作への影響を最小化）
+
 ### 使用例
 
 ```bash
@@ -224,6 +238,12 @@ ENABLE_CORS=true go run ./cmd/server/main.go
 
 # カスタムプロジェクトディレクトリとDB
 CLAUDE_PROJECTS_DIR=/custom/path DB_PATH=/custom/db.sqlite ./bin/ccloganalysis
+
+# ファイル監視を有効化（15秒ごとにスキャン）
+ENABLE_FILE_WATCH=true ./bin/ccloganalysis
+
+# ファイル監視を有効化（カスタム間隔: 30秒ごと、デバウンス: 10秒）
+ENABLE_FILE_WATCH=true FILE_WATCH_INTERVAL=30 FILE_WATCH_DEBOUNCE=10 ./bin/ccloganalysis
 ```
 
 ## API エンドポイント
