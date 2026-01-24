@@ -229,7 +229,7 @@ fi
 
 ```
 Task(
-  subagent_type="code-simplifier",
+  subagent_type="code-simplifier:code-simplifier",
   description="コード簡素化提案",
   prompt="mainブランチからの変更ファイルについて、コードの簡素化提案を行ってください。
 
