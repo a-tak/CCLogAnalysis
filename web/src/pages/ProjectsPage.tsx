@@ -23,6 +23,8 @@ export function ProjectsPage() {
           api.getProjects(),
           api.getProjectGroups(),
         ])
+        console.log('Fetched projects:', projectsRes.projects.length, 'projects')
+        console.log('Fetched groups:', groupsRes.groups.length, 'groups')
         setProjects(projectsRes.projects)
         setGroups(groupsRes.groups)
       } catch (err) {

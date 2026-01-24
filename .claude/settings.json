@@ -5,5 +5,15 @@
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true
   },
-  "plansDirectory": "./.claude/plans"
+  "plansDirectory": "./.claude/plans",
+  "permissions": {
+    "allow": [
+      "Bash(pkill:*)",
+      "Bash(killall:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(cat:*)"
+    ]
+  }
 }
