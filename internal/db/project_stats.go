@@ -34,7 +34,7 @@ type ProjectStats struct {
 	TotalOutputTokens        int       `json:"totalOutputTokens"`
 	TotalCacheCreationTokens int       `json:"totalCacheCreationTokens"`
 	TotalCacheReadTokens     int       `json:"totalCacheReadTokens"`
-	AvgTokens                int       `json:"avgTokens"`
+	AvgTokens                float64   `json:"avgTokens"`
 	FirstSession             time.Time `json:"firstSession"`
 	LastSession              time.Time `json:"lastSession"`
 	ErrorRate                float64   `json:"errorRate"`
