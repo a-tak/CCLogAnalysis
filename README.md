@@ -11,7 +11,8 @@ Claude Codeに対する各種調整（モデル選択、プロンプト設定な
 ### バックエンド
 - **言語**: Go 1.21+
 - **HTTPサーバー**: Go標準ライブラリ
-- **データベース**: SQLite（予定）
+- **データベース**: SQLite（go-sqlite3）
+- **データモード**: ファイルベース / データベース（環境変数で切り替え）
 
 ### フロントエンド
 - **フレームワーク**: React + TypeScript
@@ -34,15 +35,24 @@ CCLogAnalysis/
 │   ├── api/                     # REST APIハンドラー
 │   │   ├── router.go
 │   │   ├── router_test.go
-│   │   ├── service.go
+│   │   ├── service.go           # ファイルベース版Service
+│   │   ├── service_db.go        # データベース版Service
+│   │   ├── service_db_test.go
 │   │   └── types.go
 │   ├── parser/                  # JSONLログパーサー
 │   │   ├── parser.go
 │   │   ├── parser_test.go
 │   │   ├── types.go
 │   │   └── testdata/
+│   ├── db/                      # SQLiteデータベース層
+│   │   ├── schema.sql           # スキーマ定義
+│   │   ├── db.go                # DB接続管理
+│   │   ├── projects.go          # プロジェクトCRUD
+│   │   ├── sessions.go          # セッションCRUD
+│   │   ├── sync.go              # ファイルシステム同期
+│   │   └── *_test.go            # テストファイル
+│   ├── static/                  # 埋め込み静的ファイル
 │   ├── analyzer/                # 集計ロジック（予定）
-│   ├── db/                      # データベース操作（予定）
 │   └── config/                  # 設定管理（予定）
 ├── web/                         # Reactプロジェクト
 │   ├── src/
@@ -101,8 +111,20 @@ make build
 
 ### 実行
 
+#### ファイルベース版（デフォルト）
+
 ```bash
 ./bin/ccloganalysis
+```
+
+#### データベース版
+
+```bash
+# デフォルトDBパス使用
+USE_DB=true ./bin/ccloganalysis
+
+# カスタムDBパス指定
+USE_DB=true DB_PATH=/path/to/custom.db ./bin/ccloganalysis
 ```
 
 サーバーは http://localhost:8080 で起動し、フロントエンドとAPIの両方を提供します。
@@ -178,6 +200,38 @@ make help
 - `make run` - ビルド後に実行
 - `make help` - ヘルプ表示
 
+## 環境変数
+
+サーバーの動作を環境変数で制御できます。
+
+### データベース設定
+
+| 変数名 | 説明 | デフォルト値 | 例 |
+|--------|------|--------------|-----|
+| `USE_DB` | データベース版を使用する | `false`（ファイルベース版） | `true`, `1` |
+| `DB_PATH` | データベースファイルのパス | `~/.claude/ccloganalysis.db` | `/path/to/custom.db` |
+
+### サーバー設定
+
+| 変数名 | 説明 | デフォルト値 | 例 |
+|--------|------|--------------|-----|
+| `PORT` | サーバーポート番号 | `8080` | `3000` |
+| `CLAUDE_PROJECTS_DIR` | Claudeプロジェクトディレクトリ | `~/.claude/projects` | `/custom/path/to/projects` |
+| `ENABLE_CORS` | CORS有効化（開発用） | `false` | `true` |
+
+### 使用例
+
+```bash
+# データベース版で起動（カスタムポート）
+USE_DB=true PORT=3000 ./bin/ccloganalysis
+
+# 開発モード（CORS有効）
+ENABLE_CORS=true go run ./cmd/server/main.go
+
+# カスタムプロジェクトディレクトリとDB
+CLAUDE_PROJECTS_DIR=/custom/path USE_DB=true DB_PATH=/custom/db.sqlite ./bin/ccloganalysis
+```
+
 ## API エンドポイント
 
 ### 実装済み
@@ -188,7 +242,7 @@ make help
 | `/api/projects` | GET | プロジェクト一覧を取得 |
 | `/api/sessions` | GET | セッション一覧を取得（クエリパラメータ: `project`） |
 | `/api/sessions/{project}/{id}` | GET | セッション詳細を取得 |
-| `/api/analyze` | POST | ログ解析を実行 |
+| `/api/analyze` | POST | ログ解析を実行（DB版：同期実行） |
 
 ### 使用例
 
@@ -199,11 +253,23 @@ curl http://localhost:8080/api/health
 # プロジェクト一覧
 curl http://localhost:8080/api/projects
 
+# セッション一覧（全プロジェクト）
+curl http://localhost:8080/api/sessions
+
 # セッション一覧（特定プロジェクト）
 curl "http://localhost:8080/api/sessions?project=my-project"
 
 # セッション詳細
 curl http://localhost:8080/api/sessions/my-project/session-id
+
+# ログ解析・同期（DB版のみ）
+# 全プロジェクトを同期
+curl -X POST http://localhost:8080/api/analyze
+
+# 特定プロジェクトを同期
+curl -X POST http://localhost:8080/api/analyze \
+  -H "Content-Type: application/json" \
+  -d '{"projectNames":["my-project"]}'
 ```
 
 ## ログの場所
@@ -215,9 +281,66 @@ Claude Codeのログは以下の場所に保存されています：
 
 各プロジェクトごとにフォルダが作成され、セッションIDの`.jsonl`ファイルとして保存されます。
 
+## データベース版について
+
+### 概要
+
+データベース版では、ファイルシステム上のJSONLログをSQLiteデータベースに同期して管理します。
+
+**利点**:
+- 高速なクエリ実行
+- 複雑な集計・分析が可能
+- 将来的な拡張機能（統計、エラーパターン検出など）の基盤
+
+**動作モード**:
+- **ファイルベース版**（デフォルト）: 既存のJSONLファイルを直接読み込み
+- **データベース版**: JSONLファイルをSQLiteに同期して管理
+
+### データベーススキーマ
+
+**Phase 1（実装済み）**:
+- `projects`: プロジェクト情報
+- `sessions`: セッション基本情報とトークン集計
+- `model_usage`: モデル別トークン使用量
+- `log_entries`: ログエントリ
+- `messages`: メッセージ本文（検索用）
+- `tool_calls`: ツール呼び出し履歴
+
+**Phase 2（スキーマのみ、実装は将来）**:
+- `project_groups`, `project_group_mappings`: Gitワークツリー対応
+- `error_patterns`, `error_occurrences`: エラーパターン検出
+- `period_statistics`: 期間別統計キャッシュ
+
+### 同期機能
+
+データベース版を使用する場合、最初に `/api/analyze` エンドポイントでログを同期する必要があります。
+
+```bash
+# サーバー起動（DB版）
+USE_DB=true ./bin/ccloganalysis
+
+# ログを同期（全プロジェクト）
+curl -X POST http://localhost:8080/api/analyze
+```
+
+同期後は通常のAPIエンドポイントでデータにアクセスできます。
+
+**同期の挙動**:
+- 既存のセッションは自動的にスキップ（重複なし）
+- 新しいセッションのみがDBに追加される
+- エラーが発生しても処理は継続される
+
+### データベースファイルの場所
+
+デフォルトのデータベースパス:
+- **macOS/Linux**: `~/.claude/ccloganalysis.db`
+- **Windows**: `C:\Users\{username}\.claude\ccloganalysis.db`
+
+環境変数 `DB_PATH` でカスタマイズ可能です。
+
 ## 開発状況
 
-### Phase 1 (MVP) - 進行中
+### Phase 1 (MVP) - ✅ 完了
 
 - [x] プロジェクト初期化
 - [x] JSONLログパーサー実装
@@ -226,21 +349,28 @@ Claude Codeのログは以下の場所に保存されています：
   - [x] セッション一覧
   - [x] セッション詳細
   - [x] 解析実行
-- [x] テストコード作成（24件）
+- [x] テストコード作成（50+件）
 - [x] React UI基本実装
   - [x] プロジェクト一覧ページ
   - [x] セッション一覧ページ
   - [x] セッション詳細ページ
+  - [x] 会話履歴の閲覧
+  - [x] トークン使用量の可視化（グラフ）
 - [x] Go embedでフロントエンド統合（1バイナリ配布）
-- [ ] 会話履歴の閲覧（詳細表示）
-- [ ] トークン使用量の可視化（グラフ）
-- [ ] モデル別使用量のグラフ
+- [x] **SQLiteデータベース層実装**
+  - [x] スキーマ定義（Phase 1 & 2）
+  - [x] プロジェクト・セッションCRUD
+  - [x] ファイルシステム→DB同期機能
+  - [x] 環境変数による切り替え機能
+  - [x] 包括的なテストカバレッジ
 
 ### Phase 2 - 予定
 
-- [ ] エラーパターン検出
+- [ ] エラーパターン検出（DB基盤は実装済み）
+- [ ] 期間別統計（DB基盤は実装済み）
+- [ ] プロジェクトグループ機能（DB基盤は実装済み）
+- [ ] メッセージ全文検索（FTS）
 - [ ] 要約機能（Claude API連携）
-- [ ] 期間別推移グラフ
 - [ ] エクスポート機能
 
 ## ライセンス
