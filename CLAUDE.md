@@ -68,10 +68,10 @@ cd C:\Users\{username}\.claude\projects\{project-name}
 
 ### プランファイル命名規則
 
-- プランファイルは `claude/plans/` ディレクトリに配置
+- プランファイルは `.claude/plans/` ディレクトリに配置
 - 命名形式: `YYYY-MM-DD_タスク名.md`（日本語）
 - タスク名はわかりやすく、具体的に記述
-- 例: `2026-01-24_ファイル監視機能実装.md`
+- 例: `.claude/plans/2026-01-24_ファイル監視機能実装.md`
 
 ### ドキュメント作成時
 
