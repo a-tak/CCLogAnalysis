@@ -562,4 +562,295 @@ func TestListSessions(t *testing.T) {
 			t.Errorf("Expected 3 sessions with offset=2, got %d", len(rows))
 		}
 	})
+
+	t.Run("最初のユーザーメッセージを取得できる", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "first-message-project"
+		decodedPath := "/path/to/first-message-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// セッション作成
+		session := createTestSession("first-msg")
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// 最初のユーザーメッセージが取得されていることを確認
+		// createTestSession()の最初のエントリは"Hello, Claude!"
+		expectedMessage := "Hello, Claude!"
+		if rows[0].FirstUserMessage != expectedMessage {
+			t.Errorf("Expected FirstUserMessage=%q, got %q", expectedMessage, rows[0].FirstUserMessage)
+		}
+	})
+
+	t.Run("100文字超のメッセージが切り詰められる", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "long-message-project"
+		decodedPath := "/path/to/long-message-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 長いメッセージを持つセッションを作成
+		session := createTestSession("long-msg")
+		// 最初のエントリのメッセージを長い文字列に置き換え
+		longMessage := "これは非常に長いメッセージです。" + string(make([]byte, 150)) // 150バイト以上の文字列
+		for i := range longMessage[30:] {
+			longMessage = longMessage[:30+i] + "あ"
+		}
+		session.Entries[0].Message.Content[0].Text = longMessage
+
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// メッセージが100文字に切り詰められていることを確認
+		messageLen := len([]rune(rows[0].FirstUserMessage))
+		if messageLen > 100 {
+			t.Errorf("Expected FirstUserMessage length <= 100, got %d", messageLen)
+		}
+	})
+
+	t.Run("メッセージがないセッションで空文字列を返す", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "no-message-project"
+		decodedPath := "/path/to/no-message-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// メッセージなしのセッションを作成
+		session := createTestSession("no-msg")
+		session.Entries = []parser.LogEntry{} // メッセージを削除
+
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// メッセージがない場合は空文字列
+		if rows[0].FirstUserMessage != "" {
+			t.Errorf("Expected empty FirstUserMessage, got %q", rows[0].FirstUserMessage)
+		}
+	})
+
+	t.Run("アシスタントメッセージは除外される", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "assistant-first-project"
+		decodedPath := "/path/to/assistant-first-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// アシスタントメッセージが最初のセッションを作成
+		session := createTestSession("assistant-first")
+		// エントリの順序を逆にして、assistantが最初になるようにする
+		session.Entries[0], session.Entries[1] = session.Entries[1], session.Entries[0]
+		// タイムスタンプも調整
+		session.Entries[0].Timestamp = session.StartTime
+		session.Entries[1].Timestamp = session.StartTime.Add(5 * time.Second)
+
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// ユーザーメッセージ("Hello, Claude!")が取得されることを確認
+		expectedMessage := "Hello, Claude!"
+		if rows[0].FirstUserMessage != expectedMessage {
+			t.Errorf("Expected FirstUserMessage=%q, got %q", expectedMessage, rows[0].FirstUserMessage)
+		}
+	})
+
+	t.Run("最初のメッセージがWarmupの場合はスキップされる", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "warmup-skip-project"
+		decodedPath := "/path/to/warmup-skip-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// Warmupが最初で、その後に実際のメッセージがあるセッションを作成
+		session := createTestSession("warmup-skip")
+		session.Entries = []parser.LogEntry{
+			{
+				Type:      "user",
+				Timestamp: session.StartTime,
+				SessionID: session.ID,
+				UUID:      "entry-uuid-1-warmup-skip",
+				Cwd:       "/path/to/test-project",
+				GitBranch: "main",
+				Message: &parser.Message{
+					Model: "claude-sonnet-4-5",
+					Role:  "user",
+					Content: []parser.Content{
+						{Type: "text", Text: "Warmup"},
+					},
+				},
+			},
+			{
+				Type:      "user",
+				Timestamp: session.StartTime.Add(10 * time.Second),
+				SessionID: session.ID,
+				UUID:      "entry-uuid-2-warmup-skip",
+				Cwd:       "/path/to/test-project",
+				GitBranch: "main",
+				Message: &parser.Message{
+					Model: "claude-sonnet-4-5",
+					Role:  "user",
+					Content: []parser.Content{
+						{Type: "text", Text: "実際の質問内容"},
+					},
+				},
+			},
+		}
+
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// Warmupがスキップされて、2番目のメッセージが取得されることを確認
+		expectedMessage := "実際の質問内容"
+		if rows[0].FirstUserMessage != expectedMessage {
+			t.Errorf("Expected FirstUserMessage=%q, got %q", expectedMessage, rows[0].FirstUserMessage)
+		}
+	})
+
+	t.Run("Warmupしかない場合はアシスタントの応答を返す", func(t *testing.T) {
+		db, _ := setupTestDB(t)
+		defer db.Close()
+
+		projectName := "warmup-only-project"
+		decodedPath := "/path/to/warmup-only-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// Warmupしかないセッションを作成（アシスタント応答あり）
+		session := createTestSession("warmup-only")
+		session.Entries = []parser.LogEntry{
+			{
+				Type:      "user",
+				Timestamp: session.StartTime,
+				SessionID: session.ID,
+				UUID:      "entry-uuid-1-warmup-only",
+				Cwd:       "/path/to/test-project",
+				GitBranch: "main",
+				Message: &parser.Message{
+					Model: "claude-sonnet-4-5",
+					Role:  "user",
+					Content: []parser.Content{
+						{Type: "text", Text: "Warmup"},
+					},
+				},
+			},
+			{
+				Type:      "assistant",
+				Timestamp: session.StartTime.Add(time.Second),
+				SessionID: session.ID,
+				UUID:      "entry-uuid-2-warmup-only",
+				Cwd:       "/path/to/test-project",
+				GitBranch: "main",
+				Message: &parser.Message{
+					Model: "claude-sonnet-4-5",
+					Role:  "assistant",
+					Content: []parser.Content{
+						{Type: "text", Text: "I understand this is a warmup request. I'm ready to help with your project."},
+					},
+				},
+			},
+		}
+
+		err = db.CreateSession(session, projectName)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// セッション一覧取得
+		rows, err := db.ListSessions(nil, 10, 0)
+		if err != nil {
+			t.Fatalf("Failed to list sessions: %v", err)
+		}
+
+		if len(rows) == 0 {
+			t.Fatal("Expected at least 1 session, got 0")
+		}
+
+		// Warmupしかない場合はアシスタントの応答を返す
+		expectedMessage := "I understand this is a warmup request. I'm ready to help with your project."
+		if rows[0].FirstUserMessage != expectedMessage {
+			t.Errorf("Expected FirstUserMessage=%q, got %q", expectedMessage, rows[0].FirstUserMessage)
+		}
+	})
 }

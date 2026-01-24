@@ -70,6 +70,47 @@ func TestParseFile_TokenAggregation(t *testing.T) {
 	}
 }
 
+func TestParseFile_StringContentFormat(t *testing.T) {
+	testFile := filepath.Join("testdata", "string_content_session.jsonl")
+	parser := NewParser(".")
+
+	session, err := parser.ParseFile(testFile)
+	if err != nil {
+		t.Fatalf("ParseFile failed: %v", err)
+	}
+
+	// Test that entries were parsed
+	if len(session.Entries) == 0 {
+		t.Fatal("Expected at least 1 entry, got 0")
+	}
+
+	// Find user message
+	var userEntry *LogEntry
+	for i := range session.Entries {
+		if session.Entries[i].Type == "user" && session.Entries[i].Message != nil {
+			userEntry = &session.Entries[i]
+			break
+		}
+	}
+
+	if userEntry == nil {
+		t.Fatal("Expected to find user message")
+	}
+
+	// Test that string content was converted to array
+	if len(userEntry.Message.Content) != 1 {
+		t.Errorf("Expected 1 content block, got %d", len(userEntry.Message.Content))
+	}
+
+	if userEntry.Message.Content[0].Type != "text" {
+		t.Errorf("Expected content type 'text', got '%s'", userEntry.Message.Content[0].Type)
+	}
+
+	if userEntry.Message.Content[0].Text != "Warmup" {
+		t.Errorf("Expected content text 'Warmup', got '%s'", userEntry.Message.Content[0].Text)
+	}
+}
+
 func TestParseFile_ModelUsage(t *testing.T) {
 	testFile := filepath.Join("testdata", "sample_session.jsonl")
 	parser := NewParser(".")

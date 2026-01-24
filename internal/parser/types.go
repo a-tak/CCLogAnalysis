@@ -1,6 +1,9 @@
 package parser
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // LogEntry represents a single line in the JSONL log file
 type LogEntry struct {
@@ -25,6 +28,46 @@ type Message struct {
 	Usage   *Usage    `json:"usage,omitempty"`
 }
 
+// UnmarshalJSON implements custom unmarshaling for Message
+// to handle both string and array content formats
+func (m *Message) UnmarshalJSON(data []byte) error {
+	// Create a temporary type to avoid recursion
+	type Alias Message
+	aux := &struct {
+		Content json.RawMessage `json:"content"`
+		*Alias
+	}{
+		Alias: (*Alias)(m),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	// Try to unmarshal as array first
+	var contentArray []Content
+	if err := json.Unmarshal(aux.Content, &contentArray); err == nil {
+		m.Content = contentArray
+		return nil
+	}
+
+	// If array failed, try as string
+	var contentString string
+	if err := json.Unmarshal(aux.Content, &contentString); err == nil {
+		// Convert string to text content block
+		m.Content = []Content{
+			{
+				Type: "text",
+				Text: contentString,
+			},
+		}
+		return nil
+	}
+
+	// If both failed, return error
+	return json.Unmarshal(aux.Content, &contentArray)
+}
+
 // Content represents a content block (text or tool_use)
 type Content struct {
 	Type   string      `json:"type"`
@@ -35,9 +78,9 @@ type Content struct {
 	Caller *Caller     `json:"caller,omitempty"`
 
 	// For tool_result
-	ToolUseID string `json:"tool_use_id,omitempty"`
-	Content   string `json:"content,omitempty"`
-	IsError   bool   `json:"is_error,omitempty"`
+	ToolUseID      string      `json:"tool_use_id,omitempty"`
+	ToolResultContent interface{} `json:"content,omitempty"` // Can be string or array
+	IsError        bool        `json:"is_error,omitempty"`
 }
 
 // Caller represents the caller info for tool_use

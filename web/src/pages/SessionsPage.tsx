@@ -75,6 +75,7 @@ export function SessionsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Session ID</TableHead>
+                  <TableHead className="hidden md:table-cell">First Message</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead>Start Time</TableHead>
                   <TableHead className="text-right">Tokens</TableHead>
@@ -91,6 +92,9 @@ export function SessionsPage() {
                       >
                         {session.id.substring(0, 8)}...
                       </Link>
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell max-w-md truncate text-muted-foreground">
+                      {session.firstUserMessage || '(No message)'}
                     </TableCell>
                     <TableCell>{session.gitBranch}</TableCell>
                     <TableCell className="text-muted-foreground">

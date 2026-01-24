@@ -22,6 +22,7 @@ type SessionRow struct {
 	TotalCacheCreationTokens int
 	TotalCacheReadTokens    int
 	ErrorCount              int
+	FirstUserMessage        string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 }
@@ -351,20 +352,60 @@ func (db *DB) GetSession(sessionID string) (*parser.Session, error) {
 // ListSessions retrieves sessions with optional filtering and pagination
 func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, error) {
 	query := `
-		SELECT id, project_id, git_branch, start_time, end_time, duration_seconds,
-		       total_input_tokens, total_output_tokens,
-		       total_cache_creation_tokens, total_cache_read_tokens,
-		       error_count, created_at, updated_at
-		FROM sessions
+		SELECT s.id, s.project_id, s.git_branch, s.start_time, s.end_time, s.duration_seconds,
+		       s.total_input_tokens, s.total_output_tokens,
+		       s.total_cache_creation_tokens, s.total_cache_read_tokens,
+		       s.error_count,
+		       COALESCE(
+		           (SELECT SUBSTR(
+		               CASE
+		                   WHEN first_user.content_text = 'Warmup' AND second_user.content_text IS NOT NULL
+		                   THEN second_user.content_text
+		                   WHEN first_user.content_text = 'Warmup' AND second_user.content_text IS NULL AND first_assistant.content_text IS NOT NULL
+		                   THEN first_assistant.content_text
+		                   ELSE first_user.content_text
+		               END, 1, 100)
+		            FROM (
+		                SELECT m.content_text,
+		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
+		                FROM log_entries le
+		                JOIN messages m ON le.id = m.log_entry_id
+		                WHERE le.session_id = s.id
+		                  AND le.entry_type = 'user'
+		                  AND m.role = 'user'
+		            ) first_user
+		            LEFT JOIN (
+		                SELECT m.content_text,
+		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
+		                FROM log_entries le
+		                JOIN messages m ON le.id = m.log_entry_id
+		                WHERE le.session_id = s.id
+		                  AND le.entry_type = 'user'
+		                  AND m.role = 'user'
+		            ) second_user ON second_user.rn = 2
+		            LEFT JOIN (
+		                SELECT m.content_text,
+		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
+		                FROM log_entries le
+		                JOIN messages m ON le.id = m.log_entry_id
+		                WHERE le.session_id = s.id
+		                  AND le.entry_type = 'assistant'
+		                  AND m.role = 'assistant'
+		            ) first_assistant ON first_assistant.rn = 1
+		            WHERE first_user.rn = 1),
+		           ''
+		       ) as first_user_message,
+		       s.created_at, s.updated_at
+		FROM sessions s
 	`
 
 	var args []interface{}
 	if projectID != nil {
-		query += " WHERE project_id = ?"
+		query += " WHERE s.project_id = ?"
 		args = append(args, *projectID)
 	}
 
-	query += " ORDER BY start_time DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY s.start_time DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := db.conn.Query(query, args...)
@@ -381,7 +422,8 @@ func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, 
 			&session.StartTime, &session.EndTime, &session.DurationSeconds,
 			&session.TotalInputTokens, &session.TotalOutputTokens,
 			&session.TotalCacheCreationTokens, &session.TotalCacheReadTokens,
-			&session.ErrorCount, &session.CreatedAt, &session.UpdatedAt,
+			&session.ErrorCount, &session.FirstUserMessage,
+			&session.CreatedAt, &session.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)
