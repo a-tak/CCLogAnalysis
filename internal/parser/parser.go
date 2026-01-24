@@ -46,6 +46,22 @@ func (p *Parser) ListProjects() ([]string, error) {
 	return projects, nil
 }
 
+// GetProjectDir returns the absolute path to a project directory
+func (p *Parser) GetProjectDir(projectName string) (string, error) {
+	projectDir := filepath.Join(p.claudeDir, projectName)
+
+	// ディレクトリが存在するか確認
+	info, err := os.Stat(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("project directory does not exist: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("project path is not a directory: %s", projectDir)
+	}
+
+	return projectDir, nil
+}
+
 // ListSessions returns all session files in a project
 func (p *Parser) ListSessions(projectName string) ([]string, error) {
 	projectDir := filepath.Join(p.claudeDir, projectName)

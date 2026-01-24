@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/a-tak/ccloganalysis/internal/gitutil"
 	"github.com/a-tak/ccloganalysis/internal/parser"
 )
 
@@ -72,7 +73,27 @@ func syncProjectInternal(db *DB, p *parser.Parser, projectName string) (*SyncRes
 	if err != nil {
 		// プロジェクトが存在しない場合は作成
 		decodedPath := parser.DecodeProjectPath(projectName)
-		_, err = db.CreateProject(projectName, decodedPath)
+
+		// プロジェクトの実際のディレクトリパスを取得
+		projectDir, err := p.GetProjectDir(projectName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get project directory: %w", err)
+		}
+
+		// Git Rootを検出
+		gitRoot, gitErr := gitutil.DetectGitRoot(projectDir)
+		if gitErr != nil {
+			log.Printf("Warning: failed to detect git root for %s: %v", projectName, gitErr)
+			// Git Root検出失敗はエラーとせず、git_root=nullで保存
+			_, err = db.CreateProject(projectName, decodedPath)
+		} else if gitRoot != "" {
+			// Git Root検出成功
+			_, err = db.CreateProjectWithGitRoot(projectName, decodedPath, gitRoot)
+		} else {
+			// Git管理外（空文字列）
+			_, err = db.CreateProject(projectName, decodedPath)
+		}
+
 		if err != nil {
 			return nil, fmt.Errorf("failed to create project: %w", err)
 		}
@@ -81,6 +102,25 @@ func syncProjectInternal(db *DB, p *parser.Parser, projectName string) (*SyncRes
 		project, err = db.GetProjectByName(projectName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get created project: %w", err)
+		}
+	} else if project.GitRoot == nil {
+		// 既存プロジェクトでGit Rootが未設定の場合、検出して更新
+		projectDir, err := p.GetProjectDir(projectName)
+		if err != nil {
+			log.Printf("Warning: failed to get project directory for %s: %v", projectName, err)
+		} else {
+			gitRoot, gitErr := gitutil.DetectGitRoot(projectDir)
+			if gitErr != nil {
+				log.Printf("Warning: failed to detect git root for existing project %s: %v", projectName, gitErr)
+			} else if gitRoot != "" {
+				// Git Root検出成功、更新
+				err = db.UpdateProjectGitRoot(project.ID, gitRoot)
+				if err != nil {
+					log.Printf("Warning: failed to update git root for project %s: %v", projectName, err)
+				} else {
+					log.Printf("Updated git root for project %s: %s", projectName, gitRoot)
+				}
+			}
 		}
 	}
 
@@ -119,14 +159,6 @@ func syncProjectInternal(db *DB, p *parser.Parser, projectName string) (*SyncRes
 		}
 
 		result.SessionsSynced++
-	}
-
-	// GitRootの更新（セッションから取得できる場合）
-	if len(sessionIDs) > 0 && result.SessionsSynced > 0 {
-		// 最初のセッションからGitルートを推測
-		// 実装は簡略化: ProjectPathからGitルートを設定することも可能
-		// 現時点ではスキップ（将来の拡張として）
-		_ = project
 	}
 
 	return result, nil
