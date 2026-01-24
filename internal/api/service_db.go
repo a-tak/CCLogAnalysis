@@ -16,9 +16,33 @@ type DatabaseSessionService struct {
 // NewDatabaseSessionService creates a new DatabaseSessionService
 // parser can be nil if Analyze functionality is not needed
 func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessionService {
-	return &DatabaseSessionService{
+	service := &DatabaseSessionService{
 		db:     database,
 		parser: p,
+	}
+
+	// 初回起動時に自動同期
+	if p != nil {
+		service.autoSyncIfNeeded()
+	}
+
+	return service
+}
+
+// autoSyncIfNeeded checks if the database is empty and syncs if needed
+func (s *DatabaseSessionService) autoSyncIfNeeded() {
+	// プロジェクト数をチェック
+	projects, err := s.db.ListProjects()
+	if err != nil || len(projects) == 0 {
+		// データベースが空の場合、自動的に同期
+		fmt.Println("Database is empty. Starting initial sync...")
+		result, err := db.SyncAll(s.db, s.parser)
+		if err != nil {
+			fmt.Printf("Warning: Auto-sync failed: %v\n", err)
+			return
+		}
+		fmt.Printf("Initial sync completed: %d projects, %d sessions synced\n",
+			result.ProjectsProcessed, result.SessionsSynced)
 	}
 }
 

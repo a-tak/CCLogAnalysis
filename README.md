@@ -111,23 +111,19 @@ make build
 
 ### 実行
 
-#### ファイルベース版（デフォルト）
-
 ```bash
+# デフォルトDBパス使用（実行ファイルと同じディレクトリ）
 ./bin/ccloganalysis
-```
-
-#### データベース版
-
-```bash
-# デフォルトDBパス使用
-USE_DB=true ./bin/ccloganalysis
 
 # カスタムDBパス指定
-USE_DB=true DB_PATH=/path/to/custom.db ./bin/ccloganalysis
+DB_PATH=/path/to/custom.db ./bin/ccloganalysis
 ```
 
 サーバーは http://localhost:8080 で起動し、フロントエンドとAPIの両方を提供します。
+
+**データベース:**
+- デフォルトパス: `bin/ccloganalysis.db`（実行ファイルと同じディレクトリ）
+- 初回起動時に自動的にClaudeプロジェクトのログを同期します
 
 ブラウザで http://localhost:8080 にアクセスするとReact UIが表示されます。
 
@@ -208,8 +204,7 @@ make help
 
 | 変数名 | 説明 | デフォルト値 | 例 |
 |--------|------|--------------|-----|
-| `USE_DB` | データベース版を使用する | `false`（ファイルベース版） | `true`, `1` |
-| `DB_PATH` | データベースファイルのパス | `~/.claude/ccloganalysis.db` | `/path/to/custom.db` |
+| `DB_PATH` | データベースファイルのパス | `bin/ccloganalysis.db`（実行ファイルと同じディレクトリ） | `/path/to/custom.db` |
 
 ### サーバー設定
 
@@ -222,14 +217,14 @@ make help
 ### 使用例
 
 ```bash
-# データベース版で起動（カスタムポート）
-USE_DB=true PORT=3000 ./bin/ccloganalysis
+# カスタムポートで起動
+PORT=3000 ./bin/ccloganalysis
 
 # 開発モード（CORS有効）
 ENABLE_CORS=true go run ./cmd/server/main.go
 
 # カスタムプロジェクトディレクトリとDB
-CLAUDE_PROJECTS_DIR=/custom/path USE_DB=true DB_PATH=/custom/db.sqlite ./bin/ccloganalysis
+CLAUDE_PROJECTS_DIR=/custom/path DB_PATH=/custom/db.sqlite ./bin/ccloganalysis
 ```
 
 ## API エンドポイント
@@ -313,17 +308,17 @@ Claude Codeのログは以下の場所に保存されています：
 
 ### 同期機能
 
-データベース版を使用する場合、最初に `/api/analyze` エンドポイントでログを同期する必要があります。
+初回起動時、データベースが空の場合は自動的にログを同期します。
+
+手動で再同期したい場合は `/api/analyze` エンドポイントを使用できます：
 
 ```bash
-# サーバー起動（DB版）
-USE_DB=true ./bin/ccloganalysis
+# サーバー起動
+./bin/ccloganalysis
 
-# ログを同期（全プロジェクト）
+# ログを手動で再同期（全プロジェクト）
 curl -X POST http://localhost:8080/api/analyze
 ```
-
-同期後は通常のAPIエンドポイントでデータにアクセスできます。
 
 **同期の挙動**:
 - 既存のセッションは自動的にスキップ（重複なし）
