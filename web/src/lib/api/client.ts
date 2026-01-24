@@ -5,6 +5,11 @@ import type {
   AnalyzeRequest,
   AnalyzeResponse,
   ErrorResponse,
+  ProjectStats,
+  TimeSeriesResponse,
+  ProjectGroupListResponse,
+  ProjectGroupDetail,
+  ProjectGroupStats,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
@@ -96,6 +101,37 @@ export const api = {
   // Health check
   async healthCheck(): Promise<{ status: string }> {
     return fetchApi<{ status: string }>('/health')
+  },
+
+  // Get project statistics
+  async getProjectStats(projectName: string): Promise<ProjectStats> {
+    return fetchApi<ProjectStats>(`/projects/${encodeURIComponent(projectName)}/stats`)
+  },
+
+  // Get project timeline
+  async getProjectTimeline(
+    projectName: string,
+    period: 'day' | 'week' | 'month' = 'day',
+    limit = 30
+  ): Promise<TimeSeriesResponse> {
+    return fetchApi<TimeSeriesResponse>(
+      `/projects/${encodeURIComponent(projectName)}/timeline?period=${period}&limit=${limit}`
+    )
+  },
+
+  // Get all project groups
+  async getProjectGroups(): Promise<ProjectGroupListResponse> {
+    return fetchApi<ProjectGroupListResponse>('/groups')
+  },
+
+  // Get project group detail
+  async getProjectGroup(groupId: number): Promise<ProjectGroupDetail> {
+    return fetchApi<ProjectGroupDetail>(`/groups/${groupId}`)
+  },
+
+  // Get project group statistics
+  async getProjectGroupStats(groupId: number): Promise<ProjectGroupStats> {
+    return fetchApi<ProjectGroupStats>(`/groups/${groupId}/stats`)
   },
 }
 

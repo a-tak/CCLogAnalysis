@@ -101,3 +101,79 @@ export interface ErrorResponse {
   error: string
   message: string
 }
+
+// Project Statistics
+export interface ProjectStats {
+  totalSessions: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+  avgTokens: number
+  firstSession: string
+  lastSession: string
+  errorRate: number
+}
+
+export interface BranchStats {
+  branch: string
+  sessionCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+  lastActivity: string
+}
+
+export interface TimeSeriesDataPoint {
+  periodStart: string
+  periodEnd: string
+  sessionCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+}
+
+export interface TimeSeriesResponse {
+  period: 'day' | 'week' | 'month'
+  data: TimeSeriesDataPoint[]
+}
+
+// Project Groups
+export interface ProjectGroup {
+  id: number
+  name: string
+  gitRoot: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectGroupListResponse {
+  groups: ProjectGroup[]
+}
+
+export interface ProjectGroupDetail {
+  id: number
+  name: string
+  gitRoot: string
+  createdAt: string
+  updatedAt: string
+  projects: Project[]
+}
+
+export interface ProjectGroupStats {
+  totalProjects: number
+  totalSessions: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  avgTokens: number
+  firstSession: string
+  lastSession: string
+  errorRate: number
+}
