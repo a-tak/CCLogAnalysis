@@ -43,6 +43,12 @@ func SyncAll(db *DB, p *parser.Parser) (*SyncResult, error) {
 		result.ErrorCount += syncResult.ErrorCount
 	}
 
+	// プロジェクトグループを自動的に同期
+	if err := db.SyncProjectGroups(); err != nil {
+		log.Printf("Warning: failed to sync project groups: %v", err)
+		// エラーが発生しても処理を続行（同期処理全体は失敗させない）
+	}
+
 	return result, nil
 }
 

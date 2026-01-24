@@ -10,13 +10,17 @@ import (
 
 // MockSessionService is a mock implementation of SessionService for testing
 type MockSessionService struct {
-	projects []ProjectResponse
-	sessions []SessionSummary
-	session  *SessionDetailResponse
-	analyze  *AnalyzeResponse
-	stats    *ProjectStatsResponse
-	timeline *TimeSeriesResponse
-	err      error
+	projects           []ProjectResponse
+	sessions           []SessionSummary
+	session            *SessionDetailResponse
+	analyze            *AnalyzeResponse
+	stats              *ProjectStatsResponse
+	timeline           *TimeSeriesResponse
+	ProjectGroups      []ProjectGroupResponse
+	ProjectGroupDetail *ProjectGroupDetailResponse
+	ProjectGroupStats  *ProjectGroupStatsResponse
+	ShouldError        bool
+	err                error
 }
 
 func (m *MockSessionService) ListProjects() ([]ProjectResponse, error) {
@@ -59,6 +63,27 @@ func (m *MockSessionService) GetProjectTimeline(projectName, period string, limi
 		return nil, m.err
 	}
 	return m.timeline, nil
+}
+
+func (m *MockSessionService) ListProjectGroups() ([]ProjectGroupResponse, error) {
+	if m.ShouldError || m.err != nil {
+		return nil, m.err
+	}
+	return m.ProjectGroups, nil
+}
+
+func (m *MockSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDetailResponse, error) {
+	if m.ShouldError || m.err != nil {
+		return nil, m.err
+	}
+	return m.ProjectGroupDetail, nil
+}
+
+func (m *MockSessionService) GetProjectGroupStats(groupID int64) (*ProjectGroupStatsResponse, error) {
+	if m.ShouldError || m.err != nil {
+		return nil, m.err
+	}
+	return m.ProjectGroupStats, nil
 }
 
 func TestHealthHandler(t *testing.T) {

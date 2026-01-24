@@ -111,6 +111,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions", h.listSessionsHandler)
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)
+	mux.HandleFunc("GET /api/groups", h.listGroupsHandler)
+	mux.HandleFunc("GET /api/groups/{id}", h.getGroupHandler)
+	mux.HandleFunc("GET /api/groups/{id}/stats", h.getGroupStatsHandler)
 
 	// Static files for React frontend
 	spaHandler, err := newSPAHandler(static.Files)

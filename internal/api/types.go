@@ -10,6 +10,9 @@ type SessionService interface {
 	Analyze(projectNames []string) (*AnalyzeResponse, error)
 	GetProjectStats(projectName string) (*ProjectStatsResponse, error)
 	GetProjectTimeline(projectName, period string, limit int) (*TimeSeriesResponse, error)
+	ListProjectGroups() ([]ProjectGroupResponse, error)
+	GetProjectGroup(groupID int64) (*ProjectGroupDetailResponse, error)
+	GetProjectGroupStats(groupID int64) (*ProjectGroupStatsResponse, error)
 }
 
 // HealthResponse represents the health check response
@@ -156,4 +159,42 @@ type TimeSeriesDataPoint struct {
 type TimeSeriesResponse struct {
 	Period string                 `json:"period"`
 	Data   []TimeSeriesDataPoint `json:"data"`
+}
+
+// ProjectGroupResponse represents a project group
+type ProjectGroupResponse struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	GitRoot   string    `json:"gitRoot"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// ProjectGroupListResponse represents the list of project groups
+type ProjectGroupListResponse struct {
+	Groups []ProjectGroupResponse `json:"groups"`
+}
+
+// ProjectGroupDetailResponse represents detailed project group info with member projects
+type ProjectGroupDetailResponse struct {
+	ID        int64             `json:"id"`
+	Name      string            `json:"name"`
+	GitRoot   string            `json:"gitRoot"`
+	CreatedAt time.Time         `json:"createdAt"`
+	UpdatedAt time.Time         `json:"updatedAt"`
+	Projects  []ProjectResponse `json:"projects"`
+}
+
+// ProjectGroupStatsResponse represents project group statistics
+type ProjectGroupStatsResponse struct {
+	TotalProjects            int       `json:"totalProjects"`
+	TotalSessions            int       `json:"totalSessions"`
+	TotalInputTokens         int       `json:"totalInputTokens"`
+	TotalOutputTokens        int       `json:"totalOutputTokens"`
+	TotalCacheCreationTokens int       `json:"totalCacheCreationTokens"`
+	TotalCacheReadTokens     int       `json:"totalCacheReadTokens"`
+	AvgTokens                int       `json:"avgTokens"`
+	FirstSession             time.Time `json:"firstSession"`
+	LastSession              time.Time `json:"lastSession"`
+	ErrorRate                float64   `json:"errorRate"`
 }

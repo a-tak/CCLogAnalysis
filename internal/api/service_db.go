@@ -332,6 +332,96 @@ func (s *DatabaseSessionService) GetProjectTimeline(projectName, period string, 
 	}, nil
 }
 
+// ListProjectGroups returns all project groups
+func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, error) {
+	groupRows, err := s.db.ListProjectGroups()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project groups: %w", err)
+	}
+
+	groups := make([]ProjectGroupResponse, 0, len(groupRows))
+	for _, row := range groupRows {
+		groups = append(groups, ProjectGroupResponse{
+			ID:        row.ID,
+			Name:      row.Name,
+			GitRoot:   row.GitRoot,
+			CreatedAt: row.CreatedAt,
+			UpdatedAt: row.UpdatedAt,
+		})
+	}
+
+	return groups, nil
+}
+
+// GetProjectGroup returns detailed project group information with member projects
+func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDetailResponse, error) {
+	// グループ基本情報を取得
+	group, err := s.db.GetProjectGroupByID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	// グループ内のプロジェクトを取得
+	projectRows, err := s.db.GetProjectsByGroupID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get projects in group: %w", err)
+	}
+
+	// プロジェクトレスポンスに変換
+	projects := make([]ProjectResponse, 0, len(projectRows))
+	for _, row := range projectRows {
+		// セッション数を取得
+		sessions, err := s.db.ListSessions(&row.ID, 1000, 0)
+		sessionCount := 0
+		if err == nil {
+			sessionCount = len(sessions)
+		}
+
+		projects = append(projects, ProjectResponse{
+			Name:         row.Name,
+			DecodedPath:  row.DecodedPath,
+			SessionCount: sessionCount,
+		})
+	}
+
+	return &ProjectGroupDetailResponse{
+		ID:        group.ID,
+		Name:      group.Name,
+		GitRoot:   group.GitRoot,
+		CreatedAt: group.CreatedAt,
+		UpdatedAt: group.UpdatedAt,
+		Projects:  projects,
+	}, nil
+}
+
+// GetProjectGroupStats returns statistics for a project group
+func (s *DatabaseSessionService) GetProjectGroupStats(groupID int64) (*ProjectGroupStatsResponse, error) {
+	// グループの存在確認
+	_, err := s.db.GetProjectGroupByID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	// グループ統計を取得
+	stats, err := s.db.GetGroupStats(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group stats: %w", err)
+	}
+
+	return &ProjectGroupStatsResponse{
+		TotalProjects:            stats.TotalProjects,
+		TotalSessions:            stats.TotalSessions,
+		TotalInputTokens:         stats.TotalInputTokens,
+		TotalOutputTokens:        stats.TotalOutputTokens,
+		TotalCacheCreationTokens: stats.TotalCacheCreationTokens,
+		TotalCacheReadTokens:     stats.TotalCacheReadTokens,
+		AvgTokens:                stats.AvgTokens,
+		FirstSession:             stats.FirstSession,
+		LastSession:              stats.LastSession,
+		ErrorRate:                stats.ErrorRate,
+	}, nil
+}
+
 // formatDuration formats a duration as a human-readable string
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
