@@ -67,9 +67,9 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// ファイルが存在するか確認
 	cleanPath := strings.TrimPrefix(path, "/")
 	if f, err := h.staticFS.Open(cleanPath); err == nil {
-		f.Close()
-		// ファイルが存在する場合は通常のFileServerで処理
-		http.FileServer(h.staticFS).ServeHTTP(w, r)
+		defer f.Close()
+		// ファイルが存在する場合は、http.StripPrefixを使ってFileServerで処理
+		http.StripPrefix("/", http.FileServer(h.staticFS)).ServeHTTP(w, r)
 		return
 	}
 
