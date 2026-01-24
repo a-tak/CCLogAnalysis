@@ -41,3 +41,9 @@ firebase-debug.log
 *.tmp
 *.bak
 *.log
+
+# Playwright
+.playwright-mcp/
+
+# Claude Code settings (user-specific)
+.claude/settings.json
