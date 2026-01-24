@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api/client'
 import type { SessionDetail } from '@/lib/api/types'
 import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
 import { ModelUsageChart } from '@/components/charts/ModelUsageChart'
+import { ConversationHistory } from '@/components/conversation/ConversationHistory'
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString)
@@ -260,6 +261,22 @@ export function SessionDetailPage() {
           {session.toolCalls.length > 20 && (
             <p className="mt-4 text-sm text-muted-foreground">
               Showing 20 of {session.toolCalls.length} tool calls
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Conversation History */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Conversation History</CardTitle>
+          <CardDescription>{session.messages.length} messages</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ConversationHistory messages={session.messages.slice(0, 50)} />
+          {session.messages.length > 50 && (
+            <p className="mt-4 text-sm text-muted-foreground">
+              Showing 50 of {session.messages.length} messages
             </p>
           )}
         </CardContent>

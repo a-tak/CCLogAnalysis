@@ -44,11 +44,29 @@ export interface ToolCall {
   isError: boolean
 }
 
+// Content block types for message content
+export interface ContentBlock {
+  type: 'text' | 'tool_use' | 'tool_result'
+
+  // text type
+  text?: string
+
+  // tool_use type
+  id?: string
+  name?: string
+  input?: Record<string, unknown>
+
+  // tool_result type
+  tool_use_id?: string
+  content?: string
+  is_error?: boolean
+}
+
 export interface Message {
   type: 'user' | 'assistant'
   timestamp: string
   model?: string
-  content: unknown[]
+  content: ContentBlock[]
 }
 
 export interface SessionDetail {
