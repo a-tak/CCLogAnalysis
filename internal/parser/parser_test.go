@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -198,5 +199,133 @@ func TestParseFile_NonExistentFile(t *testing.T) {
 	_, err := parser.ParseFile("nonexistent.jsonl")
 	if err == nil {
 		t.Error("Expected error for non-existent file, got nil")
+	}
+}
+
+func TestGetProjectWorkingDirectory_Success(t *testing.T) {
+	testFile := filepath.Join("testdata", "sample_session.jsonl")
+
+	// テストディレクトリ構造を作成
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "test-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	// サンプルセッションをコピー
+	srcData, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("Failed to read sample session: %v", err)
+	}
+	dstPath := filepath.Join(projectDir, "session-1.jsonl")
+	err = os.WriteFile(dstPath, srcData, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test session: %v", err)
+	}
+
+	// パーサー作成
+	parser := NewParser(claudeDir)
+
+	// GetProjectWorkingDirectoryを実行
+	workingDir, err := parser.GetProjectWorkingDirectory("test-project")
+	if err != nil {
+		t.Fatalf("GetProjectWorkingDirectory failed: %v", err)
+	}
+
+	// sample_session.jsonlのcwdフィールドは "/Users/user/projects/my-project"
+	expectedPath := "/Users/user/projects/my-project"
+	if workingDir != expectedPath {
+		t.Errorf("Expected working directory '%s', got '%s'", expectedPath, workingDir)
+	}
+}
+
+func TestGetProjectWorkingDirectory_NoSessions(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "empty-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	parser := NewParser(claudeDir)
+
+	// セッションが存在しないプロジェクトでエラーを返す
+	_, err = parser.GetProjectWorkingDirectory("empty-project")
+	if err == nil {
+		t.Error("Expected error for project with no sessions, got nil")
+	}
+	if err != nil && err.Error() != "no sessions found for project" {
+		t.Errorf("Expected error 'no sessions found for project', got '%v'", err)
+	}
+}
+
+func TestGetProjectWorkingDirectory_EmptyCwd(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "no-cwd-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	// cwdが空のセッションを作成
+	sessionPath := filepath.Join(projectDir, "session-1.jsonl")
+	sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","version":"1.0.0","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+`
+	err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test session: %v", err)
+	}
+
+	parser := NewParser(claudeDir)
+
+	// cwdが空の場合はエラーを返す
+	_, err = parser.GetProjectWorkingDirectory("no-cwd-project")
+	if err == nil {
+		t.Error("Expected error for session with empty cwd, got nil")
+	}
+	if err != nil && err.Error() != "working directory not found in session" {
+		t.Errorf("Expected error 'working directory not found in session', got '%v'", err)
+	}
+}
+
+func TestGetProjectWorkingDirectory_MultipleSessionsSameDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "multi-session-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	// 複数セッションを作成（同じcwd）
+	expectedCwd := "/path/to/working/dir"
+	session1Content := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","cwd":"` + expectedCwd + `","version":"1.0.0","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+`
+	session2Content := `{"type":"user","timestamp":"2024-01-01T11:00:00Z","sessionId":"session-2","uuid":"uuid-2","cwd":"` + expectedCwd + `","version":"1.0.0","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test2"}]}}
+`
+
+	err = os.WriteFile(filepath.Join(projectDir, "session-1.jsonl"), []byte(session1Content), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write session-1: %v", err)
+	}
+	err = os.WriteFile(filepath.Join(projectDir, "session-2.jsonl"), []byte(session2Content), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write session-2: %v", err)
+	}
+
+	parser := NewParser(claudeDir)
+
+	// 最初のセッションのcwdが返される
+	workingDir, err := parser.GetProjectWorkingDirectory("multi-session-project")
+	if err != nil {
+		t.Fatalf("GetProjectWorkingDirectory failed: %v", err)
+	}
+
+	if workingDir != expectedCwd {
+		t.Errorf("Expected working directory '%s', got '%s'", expectedCwd, workingDir)
 	}
 }

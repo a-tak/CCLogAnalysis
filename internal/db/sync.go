@@ -80,24 +80,23 @@ func syncProjectInternal(db *DB, p *parser.Parser, projectName string) (*SyncRes
 		// プロジェクトが存在しない場合は作成
 		decodedPath := parser.DecodeProjectPath(projectName)
 
-		// プロジェクトの実際のディレクトリパスを取得
-		projectDir, err := p.GetProjectDir(projectName)
+		// 実際の作業ディレクトリを取得
+		workingDir, err := p.GetProjectWorkingDirectory(projectName)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get project directory: %w", err)
-		}
-
-		// Git Rootを検出
-		gitRoot, gitErr := gitutil.DetectGitRoot(projectDir)
-		if gitErr != nil {
-			log.Printf("Warning: failed to detect git root for %s: %v", projectName, gitErr)
-			// Git Root検出失敗はエラーとせず、git_root=nullで保存
+			// セッションが存在しない、またはcwdが取得できない
+			log.Printf("Warning: could not get working directory for %s: %v", projectName, err)
 			_, err = db.CreateProject(projectName, decodedPath)
-		} else if gitRoot != "" {
-			// Git Root検出成功
-			_, err = db.CreateProjectWithGitRoot(projectName, decodedPath, gitRoot)
 		} else {
-			// Git管理外（空文字列）
-			_, err = db.CreateProject(projectName, decodedPath)
+			// 実際の作業ディレクトリでGit Root検出
+			gitRoot, gitErr := gitutil.DetectGitRoot(workingDir)
+			if gitErr != nil {
+				log.Printf("Warning: failed to detect git root for %s: %v", projectName, gitErr)
+				_, err = db.CreateProject(projectName, decodedPath)
+			} else if gitRoot != "" {
+				_, err = db.CreateProjectWithGitRoot(projectName, decodedPath, gitRoot)
+			} else {
+				_, err = db.CreateProject(projectName, decodedPath)
+			}
 		}
 
 		if err != nil {
@@ -111,11 +110,11 @@ func syncProjectInternal(db *DB, p *parser.Parser, projectName string) (*SyncRes
 		}
 	} else if project.GitRoot == nil {
 		// 既存プロジェクトでGit Rootが未設定の場合、検出して更新
-		projectDir, err := p.GetProjectDir(projectName)
+		workingDir, err := p.GetProjectWorkingDirectory(projectName)
 		if err != nil {
-			log.Printf("Warning: failed to get project directory for %s: %v", projectName, err)
+			log.Printf("Warning: could not get working directory for %s: %v", projectName, err)
 		} else {
-			gitRoot, gitErr := gitutil.DetectGitRoot(projectDir)
+			gitRoot, gitErr := gitutil.DetectGitRoot(workingDir)
 			if gitErr != nil {
 				log.Printf("Warning: failed to detect git root for existing project %s: %v", projectName, gitErr)
 			} else if gitRoot != "" {

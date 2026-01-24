@@ -507,4 +507,44 @@ func TestGitRootDetection(t *testing.T) {
 			t.Errorf("Expected git_root %s, got %s", projectDir, *project.GitRoot)
 		}
 	})
+
+	t.Run("セッションが存在しないプロジェクトでgit_rootがnullになる", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// テスト用のClaudeディレクトリとプロジェクトを作成（セッションなし）
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		projectDir := filepath.Join(claudeDir, "no-session-project")
+		err := os.MkdirAll(projectDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create project directory: %v", err)
+		}
+
+		// .gitディレクトリを作成（Git管理下だが、セッションがない）
+		gitDir := filepath.Join(projectDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create .git directory: %v", err)
+		}
+
+		// パーサーとsync実行（セッションなし）
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("SyncAll failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootがnullであることを確認
+		// セッションが存在しないため、実際の作業ディレクトリが取得できず、
+		// Git Root検出がスキップされる
+		project, err := newDB.GetProjectByName("no-session-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+		if project.GitRoot != nil {
+			t.Errorf("Expected git_root to be null (no sessions), got %s", *project.GitRoot)
+		}
+	})
 }

@@ -176,6 +176,34 @@ func (p *Parser) ParseFile(filePath string) (*Session, error) {
 	return session, nil
 }
 
+// GetProjectWorkingDirectory returns the actual working directory for a project
+// by parsing the first available session and extracting the cwd field
+func (p *Parser) GetProjectWorkingDirectory(projectName string) (string, error) {
+	// セッション一覧を取得
+	sessions, err := p.ListSessions(projectName)
+	if err != nil {
+		return "", fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	// セッションが存在しない場合はエラー
+	if len(sessions) == 0 {
+		return "", fmt.Errorf("no sessions found for project")
+	}
+
+	// 最初のセッションをパース
+	session, err := p.ParseSession(projectName, sessions[0])
+	if err != nil {
+		return "", fmt.Errorf("failed to parse session: %w", err)
+	}
+
+	// ProjectPath（cwd）を確認
+	if session.ProjectPath == "" {
+		return "", fmt.Errorf("working directory not found in session")
+	}
+
+	return session.ProjectPath, nil
+}
+
 // DecodeProjectPath decodes an encoded project folder name
 // Example: "C--Users-{username}--my-project" -> "C:/Users/{username}/my-project"
 func DecodeProjectPath(encodedName string) string {
