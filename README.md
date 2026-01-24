@@ -85,20 +85,74 @@ cd web
 npm install
 ```
 
+## ビルド
+
+### 本番用ビルド
+
+```bash
+make build
+```
+
+これにより：
+1. Reactフロントエンドがビルドされ `web/dist/` に出力
+2. ビルド成果物が `internal/static/dist/` にコピー
+3. Goバイナリにフロントエンドが埋め込まれる
+4. `bin/ccloganalysis` が生成される
+
+### 実行
+
+```bash
+./bin/ccloganalysis
+```
+
+サーバーは http://localhost:8080 で起動し、フロントエンドとAPIの両方を提供します。
+
+ブラウザで http://localhost:8080 にアクセスするとReact UIが表示されます。
+
+### クリーンビルド
+
+```bash
+make clean
+make build
+```
+
 ## 開発
+
+### 開発モード
+
+開発時はフロントエンドとバックエンドを別々に起動することを推奨：
+
+```bash
+# ターミナル1: バックエンド（CORS有効）
+make dev
+# または
+ENABLE_CORS=true go run ./cmd/server/main.go
+
+# ターミナル2: フロントエンド（HMR有効）
+cd web && npm run dev
+```
+
+この方式では：
+- バックエンド: http://localhost:8080
+- フロントエンド: http://localhost:5173（Vite開発サーバー）
+
+フロントエンド開発時はViteの高速なHMR（Hot Module Replacement）が利用できます。
 
 ### バックエンド開発
 
-サーバーを起動：
+サーバーを起動（フロントエンド埋め込み版）：
 
 ```bash
-go run ./cmd/server/main.go
+make build
+./bin/ccloganalysis
 ```
 
 テストを実行：
 
 ```bash
 go test ./... -v
+# または
+make test
 ```
 
 ### フロントエンド開発
@@ -108,18 +162,21 @@ cd web
 npm run dev
 ```
 
-### テスト
-
-全テストを実行：
+### Makeコマンド一覧
 
 ```bash
-# バックエンドテスト
-go test ./... -v
-
-# フロントエンドテスト（今後実装）
-cd web
-npm test
+make help
 ```
+
+利用可能なコマンド：
+- `make build` - フロントエンド→バックエンドの順でビルド
+- `make build-frontend` - フロントエンドのみビルド
+- `make build-backend` - バックエンドのみビルド
+- `make test` - 全テスト実行
+- `make clean` - ビルド成果物の削除
+- `make dev` - 開発サーバー起動（CORS有効）
+- `make run` - ビルド後に実行
+- `make help` - ヘルプ表示
 
 ## API エンドポイント
 
@@ -169,10 +226,14 @@ Claude Codeのログは以下の場所に保存されています：
   - [x] セッション一覧
   - [x] セッション詳細
   - [x] 解析実行
-- [x] テストコード作成（13件）
-- [ ] React UIの実装
-- [ ] 会話履歴の閲覧
-- [ ] トークン使用量の可視化
+- [x] テストコード作成（24件）
+- [x] React UI基本実装
+  - [x] プロジェクト一覧ページ
+  - [x] セッション一覧ページ
+  - [x] セッション詳細ページ
+- [x] Go embedでフロントエンド統合（1バイナリ配布）
+- [ ] 会話履歴の閲覧（詳細表示）
+- [ ] トークン使用量の可視化（グラフ）
 - [ ] モデル別使用量のグラフ
 
 ### Phase 2 - 予定

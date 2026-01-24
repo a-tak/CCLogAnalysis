@@ -1,8 +1,15 @@
 package api
 
 import (
+	"embed"
 	"encoding/json"
+	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
+	"strings"
+
+	"github.com/a-tak/ccloganalysis/internal/static"
 )
 
 // Handler holds the dependencies for HTTP handlers
@@ -15,13 +22,72 @@ func NewHandler(service SessionService) *Handler {
 	return &Handler{service: service}
 }
 
+// spaHandler serves static files and falls back to index.html for SPA routing
+type spaHandler struct {
+	staticFS   http.FileSystem
+	indexBytes []byte
+}
+
+func newSPAHandler(fsys embed.FS) (*spaHandler, error) {
+	// dist を取り除いた fs.FS を作成
+	stripped, err := fs.Sub(fsys, "dist")
+	if err != nil {
+		return nil, err
+	}
+
+	// index.html を読み込んでキャッシュ
+	indexBytes, err := fs.ReadFile(stripped, "index.html")
+	if err != nil {
+		return nil, err
+	}
+
+	return &spaHandler{
+		staticFS:   http.FS(stripped),
+		indexBytes: indexBytes,
+	}, nil
+}
+
+func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+
+	// APIパスは処理しない（念のため）
+	if strings.HasPrefix(path, "/api/") {
+		http.NotFound(w, r)
+		return
+	}
+
+	// ルートパスの場合は index.html を返す
+	if path == "/" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(h.indexBytes)
+		return
+	}
+
+	// ファイルが存在するか確認
+	cleanPath := strings.TrimPrefix(path, "/")
+	if f, err := h.staticFS.Open(cleanPath); err == nil {
+		f.Close()
+		// ファイルが存在する場合は通常のFileServerで処理
+		http.FileServer(h.staticFS).ServeHTTP(w, r)
+		return
+	}
+
+	// ファイルが存在しない場合は index.html を返す（SPAルーティング）
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write(h.indexBytes)
+}
+
 // corsMiddleware adds CORS headers to all responses
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow all origins in development
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		// 開発時のみCORSを有効化（環境変数で制御）
+		if os.Getenv("ENABLE_CORS") == "true" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		}
 
 		// Handle preflight requests
 		if r.Method == "OPTIONS" {
@@ -44,8 +110,12 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)
 
-	// TODO: Serve static files for React frontend
-	// mux.Handle("/", http.FileServer(http.FS(staticFiles)))
+	// Static files for React frontend
+	spaHandler, err := newSPAHandler(static.Files)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create SPA handler: %v", err))
+	}
+	mux.Handle("/", spaHandler)
 
 	// Wrap with CORS middleware
 	return corsMiddleware(mux)
