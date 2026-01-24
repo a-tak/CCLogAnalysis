@@ -92,9 +92,9 @@ func TestGetProjectStats(t *testing.T) {
 		t.Errorf("Expected %d output tokens, got %d", expectedOutputTokens, stats.TotalOutputTokens)
 	}
 
-	expectedAvgTokens := (expectedInputTokens + expectedOutputTokens) / 3
+	expectedAvgTokens := float64(expectedInputTokens+expectedOutputTokens) / float64(3)
 	if stats.AvgTokens != expectedAvgTokens {
-		t.Errorf("Expected %d avg tokens, got %d", expectedAvgTokens, stats.AvgTokens)
+		t.Errorf("Expected %f avg tokens, got %f", expectedAvgTokens, stats.AvgTokens)
 	}
 
 	expectedErrorRate := float64(1) / float64(3) // 1セッションにエラーあり

@@ -5,9 +5,11 @@
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true
   },
-  "plansDirectory": "./.claude/plans",
   "permissions": {
     "allow": [
+      "Bash(go test:*)",
+      "Bash(make build-frontend:*)",
+      "Bash(npm run lint:*)",
       "Bash(pkill:*)",
       "Bash(killall:*)",
       "Bash(tail:*)",
@@ -15,5 +17,6 @@
       "Bash(head:*)",
       "Bash(cat:*)"
     ]
+
+  "plansDirectory": "./.claude/plans"
   }
-}

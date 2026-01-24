@@ -18,6 +18,7 @@ export interface SessionSummary {
   endTime: string
   totalTokens: number
   errorCount: number
+  firstUserMessage: string
 }
 
 export interface SessionsResponse {

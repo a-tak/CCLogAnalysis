@@ -105,13 +105,14 @@ func (s *DatabaseSessionService) ListSessions(projectName string) ([]SessionSumm
 		totalTokens := row.TotalInputTokens + row.TotalOutputTokens
 
 		summaries = append(summaries, SessionSummary{
-			ID:          row.ID,
-			ProjectName: project.Name,
-			GitBranch:   row.GitBranch,
-			StartTime:   row.StartTime,
-			EndTime:     row.EndTime,
-			TotalTokens: totalTokens,
-			ErrorCount:  row.ErrorCount,
+			ID:               row.ID,
+			ProjectName:      project.Name,
+			GitBranch:        row.GitBranch,
+			StartTime:        row.StartTime,
+			EndTime:          row.EndTime,
+			TotalTokens:      totalTokens,
+			ErrorCount:       row.ErrorCount,
+			FirstUserMessage: row.FirstUserMessage,
 		})
 	}
 

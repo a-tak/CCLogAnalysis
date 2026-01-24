@@ -195,6 +195,53 @@ make help
 - `make run` - ビルド後に実行
 - `make help` - ヘルプ表示
 
+### ワークツリー管理
+
+`/cr-worktree` スキルを使用して、効率的に新しい機能開発やバグ修正を開始できます。
+
+**基本的な使い方:**
+
+```bash
+# Issue番号から自動的にブランチを作成（Issueステータスも自動更新）
+/cr-worktree 123
+
+# ブランチ名を直接指定
+/cr-worktree feature/new-feature
+
+# 説明文から自動的にブランチ名を生成
+/cr-worktree "ログパーサーのバグ修正"
+
+# 現在のブランチから分岐
+/cr-worktree 123 --from-current
+```
+
+**何が起こるか:**
+
+1. メインブランチの同期確認（最新のコードを取得）
+2. ワークツリーの作成（`CCLogAnalysis.worktrees/<branch-name>/`）
+3. 環境整備:
+   - Go依存関係のインストール（`go mod download`）
+   - Node.js依存関係のインストール（`npm ci`）
+   - テスト実行（`make test`）
+4. 新しいターミナルウィンドウでClaude Code起動
+
+**Issue番号指定の利点:**
+
+- GitHub Issueから自動的にブランチ名を決定
+- Issueステータスを自動的に "In progress" に更新
+- Claude Code起動時に `/issue` コマンドを自動実行
+
+**ワークツリーの場所:**
+
+```
+~/Documents/GitHub/
+├── CCLogAnalysis/              # メインリポジトリ
+└── CCLogAnalysis.worktrees/    # ワークツリー用ディレクトリ
+    ├── feature-xyz/
+    ├── fix-abc/
+    └── 123-issue-title/
+```
+
 ## 環境変数
 
 サーバーの動作を環境変数で制御できます。

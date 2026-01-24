@@ -20,7 +20,7 @@ build-backend:
 	go build -o bin/ccloganalysis ./cmd/server
 
 # Run tests
-test:
+test: build-frontend
 	@echo "Running tests..."
 	go test ./... -v
 

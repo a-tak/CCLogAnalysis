@@ -1,0 +1,322 @@
+# セッションリストに最初の会話を表示する機能の実装プラン
+
+## 概要
+
+セッションリストに最初のユーザーメッセージを表示することで、セッションの識別を容易にします。
+
+## ユーザー要件
+
+- **表示対象**: 最初のユーザーメッセージのみ（アシスタントメッセージは除外）
+- **文字数制限**: 100文字で切り詰め、それ以上は省略記号（...）で表示
+- **空メッセージ**: メッセージがない場合は "(No message)" を表示
+- **カラム位置**: Session ID の直後に配置
+
+## 実装方針
+
+TDD（テスト駆動開発）のアプローチで、以下の3層を順次実装します：
+
+1. **データベース層** (`internal/db`)
+2. **API層** (`internal/api`)
+3. **フロントエンド層** (`web/src`)
+
+## 実装手順
+
+### Phase 1: データベース層の拡張
+
+#### 重要ファイル
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/internal/db/sessions.go`
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/internal/db/sessions_test.go` (新規)
+
+#### 実装内容
+
+1. **テストを作成** (`sessions_test.go`)
+   - 最初のユーザーメッセージが正しく取得できること
+   - 複数メッセージがある場合、最初のものが取得されること
+   - メッセージがない場合、空文字列が返されること
+   - アシスタントメッセージが除外されること
+
+2. **SessionRow構造体を拡張** (`sessions.go`)
+   ```go
+   type SessionRow struct {
+       // 既存フィールド...
+       FirstUserMessage string  // 新規追加
+   }
+   ```
+
+3. **ListSessions()のクエリを拡張**
+   ```sql
+   SELECT
+       s.id, s.project_id, s.git_branch, s.start_time, s.end_time,
+       s.duration_seconds, s.total_input_tokens, s.total_output_tokens,
+       s.total_cache_creation_tokens, s.total_cache_read_tokens,
+       s.error_count, s.created_at, s.updated_at,
+       COALESCE(
+           (SELECT SUBSTR(m.content_text, 1, 100)
+            FROM log_entries le
+            JOIN messages m ON le.id = m.log_entry_id
+            WHERE le.session_id = s.id
+              AND le.entry_type = 'user'
+              AND m.role = 'user'
+            ORDER BY le.timestamp ASC
+            LIMIT 1),
+           ''
+       ) as first_user_message
+   FROM sessions s
+   WHERE ...
+   ```
+
+4. **rows.Scan()を更新**
+   - 新しいフィールドをスキャン対象に追加
+
+### Phase 2: API層の拡張
+
+#### 重要ファイル
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/internal/api/types.go`
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/internal/api/service_db.go`
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/internal/api/service_db_test.go` (新規)
+
+#### 実装内容
+
+1. **テストを作成** (`service_db_test.go`)
+   - SessionSummaryにFirstUserMessageが含まれること
+   - データベース層からの値が正しく伝播すること
+
+2. **SessionSummary構造体を拡張** (`types.go`)
+   ```go
+   type SessionSummary struct {
+       ID               string    `json:"id"`
+       ProjectName      string    `json:"projectName"`
+       GitBranch        string    `json:"gitBranch"`
+       StartTime        time.Time `json:"startTime"`
+       EndTime          time.Time `json:"endTime"`
+       TotalTokens      int       `json:"totalTokens"`
+       ErrorCount       int       `json:"errorCount"`
+       FirstUserMessage string    `json:"firstUserMessage"` // 新規追加
+   }
+   ```
+
+3. **ListSessions()の変換ロジックを更新** (`service_db.go`)
+   ```go
+   summaries = append(summaries, SessionSummary{
+       // 既存フィールド...
+       FirstUserMessage: row.FirstUserMessage, // 新規追加
+   })
+   ```
+
+### Phase 3: フロントエンド層の拡張
+
+#### 重要ファイル
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/web/src/lib/api/types.ts`
+- `/Users/a-tak/Documents/GitHub/CCLogAnalysis/web/src/pages/SessionsPage.tsx`
+
+#### 実装内容
+
+1. **TypeScript型定義を更新** (`types.ts`)
+   ```typescript
+   export interface SessionSummary {
+     id: string
+     projectName: string
+     gitBranch: string
+     startTime: string
+     endTime: string
+     totalTokens: number
+     errorCount: number
+     firstUserMessage: string  // 新規追加
+   }
+   ```
+
+2. **テーブルUIを更新** (`SessionsPage.tsx`)
+
+   **ヘッダー行に新規カラムを追加:**
+   ```tsx
+   <TableHeader>
+     <TableRow>
+       <TableHead>Session ID</TableHead>
+       <TableHead className="hidden md:table-cell">First Message</TableHead>  {/* 新規 */}
+       <TableHead>Branch</TableHead>
+       <TableHead>Start Time</TableHead>
+       <TableHead className="text-right">Tokens</TableHead>
+       <TableHead className="text-right">Errors</TableHead>
+     </TableRow>
+   </TableHeader>
+   ```
+
+   **データ行に新規セルを追加:**
+   ```tsx
+   <TableRow key={session.id}>
+     <TableCell className="font-medium">
+       <Link to={...}>{session.id.substring(0, 8)}...</Link>
+     </TableCell>
+     <TableCell className="hidden md:table-cell max-w-md truncate text-muted-foreground">
+       {session.firstUserMessage || '(No message)'}
+     </TableCell>
+     {/* 既存のセル... */}
+   </TableRow>
+   ```
+
+3. **レスポンシブ対応**
+   - `hidden md:table-cell` クラスでモバイルでは非表示
+   - `truncate` クラスで長いメッセージを省略記号付きで切り詰め
+   - `max-w-md` クラスで最大幅を制限
+
+## テスト方針
+
+### ユニットテスト
+
+1. **データベース層** (`internal/db/sessions_test.go`)
+   - 最初のユーザーメッセージが取得できる
+   - 複数メッセージの場合、最初のものが取得される
+   - メッセージがない場合、空文字列が返される
+   - 100文字超のメッセージが切り詰められる（SQLのSUBSTR）
+   - アシスタントメッセージは除外される
+
+2. **API層** (`internal/api/service_db_test.go`)
+   - SessionSummaryにfirstUserMessageが含まれる
+   - データベースからの値が正しく伝播する
+
+### 統合テスト
+
+3. **APIエンドポイント** (`internal/api/router_test.go`)
+   - `GET /api/sessions` のレスポンスにfirstUserMessageが含まれる
+   - JSONスキーマが正しい
+
+### 手動テスト
+
+4. **フロントエンド**
+   - セッションリストに最初のメッセージが表示される
+   - 長いメッセージが適切に切り詰められる（CSS truncate）
+   - メッセージがないセッションで "(No message)" が表示される
+   - レスポンシブデザインが機能する（モバイルで非表示）
+
+## パフォーマンス考慮
+
+### クエリ最適化
+
+- **サブクエリ方式**: 各セッションで1回実行
+- **既存インデックス利用**:
+  - `idx_log_entries_session`: session_id検索
+  - `idx_log_entries_timestamp`: timestamp順ソート
+  - `idx_messages_role`: role='user'フィルタ
+- **予想影響**: 1000セッションで数百ミリ秒程度の追加コスト
+
+### N+1問題の回避
+
+サブクエリで一括取得するため、N+1問題は発生しません。
+
+## エッジケースの処理
+
+### データベース層
+
+1. **メッセージがないセッション**: `COALESCE(..., '')` で空文字列を返す
+2. **content_textがNULL**: 空文字列として扱われる
+3. **複数のユーザーメッセージ**: `ORDER BY timestamp ASC LIMIT 1` で最初のみ取得
+4. **特殊文字**: SQLiteのSUBSTR()で安全に切り詰め
+
+### フロントエンド
+
+1. **空メッセージ**: `|| '(No message)'` で代替表示
+2. **長いメッセージ**: CSS `truncate` クラスで省略記号表示
+3. **改行文字**: CSSでホワイトスペース処理
+
+## 下位互換性
+
+- **API互換性**: 新規フィールド追加のみ（既存クライアントに影響なし）
+- **データベース互換性**: スキーマ変更なし（クエリのみ変更）
+
+## 検証方法（エンドツーエンド）
+
+### 1. バックエンドのテスト実行
+
+```bash
+cd internal/db
+go test -v -run TestListSessionsWithFirstMessage
+
+cd ../api
+go test -v -run TestListSessionsWithFirstMessage
+```
+
+### 2. サーバー起動
+
+```bash
+cd /Users/{username}/Documents/GitHub/CCLogAnalysis
+go run cmd/server/main.go
+```
+
+### 3. フロントエンド起動
+
+```bash
+cd web
+npm run dev
+```
+
+### 4. ブラウザでの手動確認
+
+1. `http://localhost:5173` にアクセス
+2. プロジェクトを選択
+3. セッションリストを表示
+4. 以下を確認:
+   - Session ID の後に "First Message" カラムが表示される
+   - 各セッションの最初のユーザーメッセージが表示される
+   - 長いメッセージは省略記号（...）で切り詰められる
+   - メッセージがないセッションは "(No message)" と表示される
+   - モバイルビュー（画面幅を狭める）で First Message カラムが非表示になる
+
+### 5. API直接確認
+
+```bash
+curl http://localhost:8080/api/sessions?project={project-name} | jq '.sessions[0]'
+```
+
+期待されるJSON:
+```json
+{
+  "id": "...",
+  "projectName": "...",
+  "gitBranch": "...",
+  "startTime": "...",
+  "endTime": "...",
+  "totalTokens": 12345,
+  "errorCount": 0,
+  "firstUserMessage": "セッションリストですが、現在はセッションIDだけでは内容がわからないため、開始時間以外にセッションを選択する基準がないです。セッションの最初の会話が少しリスト..."
+}
+```
+
+## ドキュメント更新
+
+実装後、以下のドキュメントを更新:
+
+1. **`docs/API設計.md`**
+   - `GET /api/sessions` のレスポンス例を更新
+   - SessionSummaryのフィールド説明にfirstUserMessageを追加
+
+2. **`docs/WIP/2026-01-24_セッションリスト改善.md`** (新規)
+   - 作業内容の記録
+   - 実装の詳細
+   - テスト結果
+
+## ロールバックプラン
+
+問題が発生した場合：
+
+1. **データベース層**: ListSessions()のクエリを元に戻す
+2. **API層**: SessionSummaryからFirstUserMessageフィールドを削除
+3. **フロントエンド**: First Messageカラムを非表示（CSS display: none）
+
+## 将来の拡張案
+
+- メッセージプレビューのホバー表示（ツールチップで全文表示）
+- メッセージ検索機能（content_textでの全文検索）
+- 検索語句のハイライト表示
+- ページネーション（大量セッション対応）
+
+---
+
+## 実装完了の定義
+
+- [ ] 全てのユニットテストがパスする
+- [ ] 全ての統合テストがパスする
+- [ ] フロントエンドで正しく表示される
+- [ ] レスポンシブデザインが機能する
+- [ ] APIドキュメントが更新される
+- [ ] WIPドキュメントが作成される
+- [ ] コミットメッセージが日本語で記述される

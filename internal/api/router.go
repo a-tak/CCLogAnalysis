@@ -82,8 +82,8 @@ func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // corsMiddleware adds CORS headers to all responses
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// 開発時のみCORSを有効化（環境変数で制御）
-		if os.Getenv("ENABLE_CORS") == "true" {
+		// 開発時は常にCORSを有効化（DISABLE_CORS=trueで無効化可能）
+		if os.Getenv("DISABLE_CORS") != "true" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")

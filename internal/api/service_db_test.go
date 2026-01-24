@@ -289,6 +289,58 @@ func TestDatabaseSessionService_ListSessions(t *testing.T) {
 			t.Errorf("Expected 0 sessions, got %d", len(sessions))
 		}
 	})
+
+	t.Run("SessionSummaryにFirstUserMessageが含まれる", func(t *testing.T) {
+		sessions, err := service.ListSessions("test-project-1")
+		if err != nil {
+			t.Fatalf("ListSessions failed: %v", err)
+		}
+
+		if len(sessions) < 2 {
+			t.Fatalf("Expected at least 2 sessions, got %d", len(sessions))
+		}
+
+		// 各セッションにFirstUserMessageが含まれていることを確認
+		for _, session := range sessions {
+			if session.FirstUserMessage == "" {
+				t.Errorf("Session %s: Expected non-empty FirstUserMessage", session.ID)
+			}
+		}
+
+		// session-2（新しい方）は "Test" を含むはず
+		if sessions[0].ID == "session-2" {
+			if sessions[0].FirstUserMessage != "Test" {
+				t.Errorf("Expected FirstUserMessage='Test', got '%s'", sessions[0].FirstUserMessage)
+			}
+		}
+
+		// session-1（古い方）は "Hello" を含むはず
+		if sessions[1].ID == "session-1" {
+			if sessions[1].FirstUserMessage != "Hello" {
+				t.Errorf("Expected FirstUserMessage='Hello', got '%s'", sessions[1].FirstUserMessage)
+			}
+		}
+	})
+
+	t.Run("データベース層からFirstUserMessageが正しく伝播する", func(t *testing.T) {
+		sessions, err := service.ListSessions("")
+		if err != nil {
+			t.Fatalf("ListSessions failed: %v", err)
+		}
+
+		if len(sessions) != 3 {
+			t.Fatalf("Expected 3 sessions, got %d", len(sessions))
+		}
+
+		// 全てのセッションにFirstUserMessageフィールドが存在することを確認
+		for _, session := range sessions {
+			// フィールドが存在することを確認（空でも良い）
+			// この場合、全てのセッションにユーザーメッセージがあるはず
+			if session.FirstUserMessage == "" {
+				t.Errorf("Session %s: Expected non-empty FirstUserMessage", session.ID)
+			}
+		}
+	})
 }
 
 func TestDatabaseSessionService_GetSession(t *testing.T) {

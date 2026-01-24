@@ -22,6 +22,7 @@ type SessionRow struct {
 	TotalCacheCreationTokens int
 	TotalCacheReadTokens    int
 	ErrorCount              int
+	FirstUserMessage        string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 }
@@ -45,6 +46,9 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 		return fmt.Errorf("failed to get project ID: %w", err)
 	}
 
+	// First user messageを計算
+	firstUserMessage := calculateFirstUserMessage(session)
+
 	// セッション挿入
 	durationSeconds := int(session.EndTime.Sub(session.StartTime).Seconds())
 	sessionQuery := `
@@ -52,8 +56,8 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 			id, project_id, git_branch, start_time, end_time, duration_seconds,
 			total_input_tokens, total_output_tokens,
 			total_cache_creation_tokens, total_cache_read_tokens,
-			error_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			error_count, first_user_message
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err = tx.Exec(sessionQuery,
 		session.ID, projectID, session.GitBranch,
@@ -61,6 +65,7 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 		session.TotalTokens.InputTokens, session.TotalTokens.OutputTokens,
 		session.TotalTokens.CacheCreationInputTokens, session.TotalTokens.CacheReadInputTokens,
 		session.ErrorCount,
+		firstUserMessage,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert session: %w", err)
@@ -198,6 +203,56 @@ func extractTextFromContent(contents []parser.Content) string {
 		}
 	}
 	return text
+}
+
+// calculateFirstUserMessage calculates the first user message for session list display
+// It handles the Warmup message skip logic
+func calculateFirstUserMessage(session *parser.Session) string {
+	var firstUserMsg, secondUserMsg, firstAssistantMsg string
+
+	userMsgCount := 0
+	assistantMsgCount := 0
+
+	for _, entry := range session.Entries {
+		if entry.Type == "user" && entry.Message != nil {
+			userMsgCount++
+			if userMsgCount == 1 {
+				firstUserMsg = extractTextFromContent(entry.Message.Content)
+			} else if userMsgCount == 2 {
+				secondUserMsg = extractTextFromContent(entry.Message.Content)
+			}
+		}
+
+		if entry.Type == "assistant" && entry.Message != nil && assistantMsgCount == 0 {
+			assistantMsgCount++
+			firstAssistantMsg = extractTextFromContent(entry.Message.Content)
+		}
+
+		// 必要な情報が揃ったら早期終了
+		if userMsgCount >= 2 && assistantMsgCount >= 1 {
+			break
+		}
+	}
+
+	// Warmup処理ロジック
+	if firstUserMsg == "Warmup" {
+		if secondUserMsg != "" {
+			return truncate(secondUserMsg, 100)
+		} else if firstAssistantMsg != "" {
+			return truncate(firstAssistantMsg, 100)
+		}
+	}
+
+	return truncate(firstUserMsg, 100)
+}
+
+// truncate truncates a string to maxLen characters (rune-based for Japanese support)
+func truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen])
 }
 
 // GetSession retrieves a session and all related data
@@ -351,20 +406,22 @@ func (db *DB) GetSession(sessionID string) (*parser.Session, error) {
 // ListSessions retrieves sessions with optional filtering and pagination
 func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, error) {
 	query := `
-		SELECT id, project_id, git_branch, start_time, end_time, duration_seconds,
-		       total_input_tokens, total_output_tokens,
-		       total_cache_creation_tokens, total_cache_read_tokens,
-		       error_count, created_at, updated_at
-		FROM sessions
+		SELECT s.id, s.project_id, s.git_branch, s.start_time, s.end_time, s.duration_seconds,
+		       s.total_input_tokens, s.total_output_tokens,
+		       s.total_cache_creation_tokens, s.total_cache_read_tokens,
+		       s.error_count,
+		       s.first_user_message,
+		       s.created_at, s.updated_at
+		FROM sessions s
 	`
 
 	var args []interface{}
 	if projectID != nil {
-		query += " WHERE project_id = ?"
+		query += " WHERE s.project_id = ?"
 		args = append(args, *projectID)
 	}
 
-	query += " ORDER BY start_time DESC LIMIT ? OFFSET ?"
+	query += " ORDER BY s.start_time DESC LIMIT ? OFFSET ?"
 	args = append(args, limit, offset)
 
 	rows, err := db.conn.Query(query, args...)
@@ -381,7 +438,8 @@ func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, 
 			&session.StartTime, &session.EndTime, &session.DurationSeconds,
 			&session.TotalInputTokens, &session.TotalOutputTokens,
 			&session.TotalCacheCreationTokens, &session.TotalCacheReadTokens,
-			&session.ErrorCount, &session.CreatedAt, &session.UpdatedAt,
+			&session.ErrorCount, &session.FirstUserMessage,
+			&session.CreatedAt, &session.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)

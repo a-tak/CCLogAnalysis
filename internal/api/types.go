@@ -34,13 +34,14 @@ type ProjectListResponse struct {
 
 // SessionSummary represents a session in list view
 type SessionSummary struct {
-	ID          string    `json:"id"`
-	ProjectName string    `json:"projectName"`
-	GitBranch   string    `json:"gitBranch"`
-	StartTime   time.Time `json:"startTime"`
-	EndTime     time.Time `json:"endTime"`
-	TotalTokens int       `json:"totalTokens"`
-	ErrorCount  int       `json:"errorCount"`
+	ID               string    `json:"id"`
+	ProjectName      string    `json:"projectName"`
+	GitBranch        string    `json:"gitBranch"`
+	StartTime        time.Time `json:"startTime"`
+	EndTime          time.Time `json:"endTime"`
+	TotalTokens      int       `json:"totalTokens"`
+	ErrorCount       int       `json:"errorCount"`
+	FirstUserMessage string    `json:"firstUserMessage"`
 }
 
 // SessionListResponse represents the list of sessions

@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     total_cache_read_tokens INTEGER NOT NULL DEFAULT 0,
 
     error_count INTEGER NOT NULL DEFAULT 0,
+    first_user_message TEXT DEFAULT '',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
