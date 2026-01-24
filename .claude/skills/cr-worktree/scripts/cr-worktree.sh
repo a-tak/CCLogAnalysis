@@ -305,21 +305,16 @@ elif [[ "$ARG" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
   echo "✅ Node.js依存関係インストール完了"
   echo ""
 
-  # 3. テスト実行（環境構築の検証）
-  echo "🧪 テストを実行中..."
-  if ! make test; then
-    echo ""
-    echo "⚠️  警告: テストが失敗しました"
-    echo "   環境構築は完了していますが、コードにエラーがある可能性があります"
-    read -p "続行する場合は 'y' を入力: " CONFIRM
-    if [ "$CONFIRM" != "y" ]; then
-      exit 1
-    fi
-    echo ""
-  else
-    echo "✅ テスト完了"
-    echo ""
+  # 2.5. Reactアプリのビルド
+  echo "🏗️  Reactアプリをビルド中..."
+  cd web
+  if ! npm run build; then
+    echo "❌ エラー: Reactアプリのビルドに失敗しました"
+    exit 1
   fi
+  cd ..
+  echo "✅ Reactアプリのビルド完了"
+  echo ""
 
   echo "✅ 環境整備完了"
   echo ""
