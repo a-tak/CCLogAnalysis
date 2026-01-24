@@ -15,6 +15,24 @@ func NewHandler(service SessionService) *Handler {
 	return &Handler{service: service}
 }
 
+// corsMiddleware adds CORS headers to all responses
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow all origins in development
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// Handle preflight requests
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // Routes returns the HTTP handler with all routes configured
 func (h *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
@@ -29,7 +47,8 @@ func (h *Handler) Routes() http.Handler {
 	// TODO: Serve static files for React frontend
 	// mux.Handle("/", http.FileServer(http.FS(staticFiles)))
 
-	return mux
+	// Wrap with CORS middleware
+	return corsMiddleware(mux)
 }
 
 // healthHandler returns server health status
