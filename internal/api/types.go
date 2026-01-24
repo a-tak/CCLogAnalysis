@@ -2,6 +2,14 @@ package api
 
 import "time"
 
+// SessionService defines the interface for session operations
+type SessionService interface {
+	ListProjects() ([]ProjectResponse, error)
+	ListSessions(projectName string) ([]SessionSummary, error)
+	GetSession(projectName, sessionID string) (*SessionDetailResponse, error)
+	Analyze(projectNames []string) (*AnalyzeResponse, error)
+}
+
 // HealthResponse represents the health check response
 type HealthResponse struct {
 	Status string `json:"status"`

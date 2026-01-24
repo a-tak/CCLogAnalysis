@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
 	"github.com/a-tak/ccloganalysis/internal/parser"
@@ -256,4 +257,15 @@ func (s *DatabaseSessionService) Analyze(projectNames []string) (*AnalyzeRespons
 		ErrorCount:     result.ErrorCount,
 		Message:        fmt.Sprintf("Synced %d sessions from %d projects", result.SessionsSynced, result.ProjectsProcessed),
 	}, nil
+}
+
+// formatDuration formats a duration as a human-readable string
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+	}
+	return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
 }
