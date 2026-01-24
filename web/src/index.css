@@ -22,6 +22,12 @@
   --color-input: hsl(214.3 31.8% 91.4%);
   --color-ring: hsl(221.2 83.2% 53.3%);
 
+  /* Chart colors - vibrant palette for data visualization */
+  --color-chart-1: hsl(221.2 83.2% 53.3%); /* Blue - for Input tokens */
+  --color-chart-2: hsl(262 83% 58%); /* Purple - for Output tokens */
+  --color-chart-3: hsl(25 95% 53%); /* Orange - for Cache Creation */
+  --color-chart-4: hsl(215 16.3% 46.9%); /* Gray - for Cache Read */
+
   --radius: 0.5rem;
 }
 

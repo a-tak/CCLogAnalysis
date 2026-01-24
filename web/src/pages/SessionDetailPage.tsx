@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, ApiError } from '@/lib/api/client'
 import type { SessionDetail } from '@/lib/api/types'
+import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
+import { ModelUsageChart } from '@/components/charts/ModelUsageChart'
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString)
@@ -119,46 +121,58 @@ export function SessionDetailPage() {
       </Card>
 
       {/* Token Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Token Usage</CardTitle>
-          <CardDescription>Total tokens used in this session</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <dt className="font-medium text-muted-foreground">Input Tokens</dt>
-              <dd className="mt-1 text-lg font-semibold">
-                {session.totalTokens.inputTokens.toLocaleString()}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">Output Tokens</dt>
-              <dd className="mt-1 text-lg font-semibold">
-                {session.totalTokens.outputTokens.toLocaleString()}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">Cache Creation</dt>
-              <dd className="mt-1 text-lg font-semibold">
-                {session.totalTokens.cacheCreationInputTokens.toLocaleString()}
-              </dd>
-            </div>
-            <div>
-              <dt className="font-medium text-muted-foreground">Cache Read</dt>
-              <dd className="mt-1 text-lg font-semibold">
-                {session.totalTokens.cacheReadInputTokens.toLocaleString()}
-              </dd>
-            </div>
-            <div className="col-span-2">
-              <dt className="font-medium text-muted-foreground">Total Tokens</dt>
-              <dd className="mt-1 text-2xl font-bold text-primary">
-                {session.totalTokens.totalTokens.toLocaleString()}
-              </dd>
-            </div>
-          </dl>
-        </CardContent>
-      </Card>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Token Usage</CardTitle>
+            <CardDescription>Total tokens used in this session</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <dt className="font-medium text-muted-foreground">Input Tokens</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {session.totalTokens.inputTokens.toLocaleString()}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Output Tokens</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {session.totalTokens.outputTokens.toLocaleString()}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Cache Creation</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {session.totalTokens.cacheCreationInputTokens.toLocaleString()}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-medium text-muted-foreground">Cache Read</dt>
+                <dd className="mt-1 text-lg font-semibold">
+                  {session.totalTokens.cacheReadInputTokens.toLocaleString()}
+                </dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="font-medium text-muted-foreground">Total Tokens</dt>
+                <dd className="mt-1 text-2xl font-bold text-primary">
+                  {session.totalTokens.totalTokens.toLocaleString()}
+                </dd>
+              </div>
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Token Breakdown</CardTitle>
+            <CardDescription>Distribution of token types</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <TokenBreakdownChart tokens={session.totalTokens} />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Model Usage */}
       <Card>
@@ -166,7 +180,9 @@ export function SessionDetailPage() {
           <CardTitle>Model Usage</CardTitle>
           <CardDescription>Tokens used per model</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          <ModelUsageChart modelUsage={session.modelUsage} />
+
           <Table>
             <TableHeader>
               <TableRow>
