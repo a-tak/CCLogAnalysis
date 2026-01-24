@@ -46,6 +46,9 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 		return fmt.Errorf("failed to get project ID: %w", err)
 	}
 
+	// First user messageを計算
+	firstUserMessage := calculateFirstUserMessage(session)
+
 	// セッション挿入
 	durationSeconds := int(session.EndTime.Sub(session.StartTime).Seconds())
 	sessionQuery := `
@@ -53,8 +56,8 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 			id, project_id, git_branch, start_time, end_time, duration_seconds,
 			total_input_tokens, total_output_tokens,
 			total_cache_creation_tokens, total_cache_read_tokens,
-			error_count
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			error_count, first_user_message
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err = tx.Exec(sessionQuery,
 		session.ID, projectID, session.GitBranch,
@@ -62,6 +65,7 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 		session.TotalTokens.InputTokens, session.TotalTokens.OutputTokens,
 		session.TotalTokens.CacheCreationInputTokens, session.TotalTokens.CacheReadInputTokens,
 		session.ErrorCount,
+		firstUserMessage,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert session: %w", err)
@@ -199,6 +203,56 @@ func extractTextFromContent(contents []parser.Content) string {
 		}
 	}
 	return text
+}
+
+// calculateFirstUserMessage calculates the first user message for session list display
+// It handles the Warmup message skip logic
+func calculateFirstUserMessage(session *parser.Session) string {
+	var firstUserMsg, secondUserMsg, firstAssistantMsg string
+
+	userMsgCount := 0
+	assistantMsgCount := 0
+
+	for _, entry := range session.Entries {
+		if entry.Type == "user" && entry.Message != nil {
+			userMsgCount++
+			if userMsgCount == 1 {
+				firstUserMsg = extractTextFromContent(entry.Message.Content)
+			} else if userMsgCount == 2 {
+				secondUserMsg = extractTextFromContent(entry.Message.Content)
+			}
+		}
+
+		if entry.Type == "assistant" && entry.Message != nil && assistantMsgCount == 0 {
+			assistantMsgCount++
+			firstAssistantMsg = extractTextFromContent(entry.Message.Content)
+		}
+
+		// 必要な情報が揃ったら早期終了
+		if userMsgCount >= 2 && assistantMsgCount >= 1 {
+			break
+		}
+	}
+
+	// Warmup処理ロジック
+	if firstUserMsg == "Warmup" {
+		if secondUserMsg != "" {
+			return truncate(secondUserMsg, 100)
+		} else if firstAssistantMsg != "" {
+			return truncate(firstAssistantMsg, 100)
+		}
+	}
+
+	return truncate(firstUserMsg, 100)
+}
+
+// truncate truncates a string to maxLen characters (rune-based for Japanese support)
+func truncate(s string, maxLen int) string {
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen])
 }
 
 // GetSession retrieves a session and all related data
@@ -356,45 +410,7 @@ func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, 
 		       s.total_input_tokens, s.total_output_tokens,
 		       s.total_cache_creation_tokens, s.total_cache_read_tokens,
 		       s.error_count,
-		       COALESCE(
-		           (SELECT SUBSTR(
-		               CASE
-		                   WHEN first_user.content_text = 'Warmup' AND second_user.content_text IS NOT NULL
-		                   THEN second_user.content_text
-		                   WHEN first_user.content_text = 'Warmup' AND second_user.content_text IS NULL AND first_assistant.content_text IS NOT NULL
-		                   THEN first_assistant.content_text
-		                   ELSE first_user.content_text
-		               END, 1, 100)
-		            FROM (
-		                SELECT m.content_text,
-		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
-		                FROM log_entries le
-		                JOIN messages m ON le.id = m.log_entry_id
-		                WHERE le.session_id = s.id
-		                  AND le.entry_type = 'user'
-		                  AND m.role = 'user'
-		            ) first_user
-		            LEFT JOIN (
-		                SELECT m.content_text,
-		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
-		                FROM log_entries le
-		                JOIN messages m ON le.id = m.log_entry_id
-		                WHERE le.session_id = s.id
-		                  AND le.entry_type = 'user'
-		                  AND m.role = 'user'
-		            ) second_user ON second_user.rn = 2
-		            LEFT JOIN (
-		                SELECT m.content_text,
-		                       ROW_NUMBER() OVER (ORDER BY le.timestamp ASC) as rn
-		                FROM log_entries le
-		                JOIN messages m ON le.id = m.log_entry_id
-		                WHERE le.session_id = s.id
-		                  AND le.entry_type = 'assistant'
-		                  AND m.role = 'assistant'
-		            ) first_assistant ON first_assistant.rn = 1
-		            WHERE first_user.rn = 1),
-		           ''
-		       ) as first_user_message,
+		       s.first_user_message,
 		       s.created_at, s.updated_at
 		FROM sessions s
 	`

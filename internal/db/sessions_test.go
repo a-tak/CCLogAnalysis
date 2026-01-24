@@ -854,3 +854,145 @@ func TestListSessions(t *testing.T) {
 		}
 	})
 }
+
+func TestCalculateFirstUserMessage(t *testing.T) {
+	t.Run("通常のユーザーメッセージを返す", func(t *testing.T) {
+		session := &parser.Session{
+			Entries: []parser.LogEntry{
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "Hello, world!"},
+						},
+					},
+				},
+			},
+		}
+
+		result := calculateFirstUserMessage(session)
+		expected := "Hello, world!"
+		if result != expected {
+			t.Errorf("Expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("Warmupメッセージをスキップする", func(t *testing.T) {
+		session := &parser.Session{
+			Entries: []parser.LogEntry{
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "Warmup"},
+						},
+					},
+				},
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "実際の質問"},
+						},
+					},
+				},
+			},
+		}
+
+		result := calculateFirstUserMessage(session)
+		expected := "実際の質問"
+		if result != expected {
+			t.Errorf("Expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("100文字超を切り詰める", func(t *testing.T) {
+		// 150文字のメッセージを作成
+		longText := ""
+		for i := 0; i < 150; i++ {
+			longText += "あ"
+		}
+
+		session := &parser.Session{
+			Entries: []parser.LogEntry{
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: longText},
+						},
+					},
+				},
+			},
+		}
+
+		result := calculateFirstUserMessage(session)
+		resultLen := len([]rune(result))
+		if resultLen != 100 {
+			t.Errorf("Expected length 100, got %d", resultLen)
+		}
+	})
+
+	t.Run("メッセージがない場合は空文字列", func(t *testing.T) {
+		session := &parser.Session{
+			Entries: []parser.LogEntry{},
+		}
+
+		result := calculateFirstUserMessage(session)
+		if result != "" {
+			t.Errorf("Expected empty string, got %q", result)
+		}
+	})
+
+	t.Run("Warmupのみの場合はアシスタント応答を返す", func(t *testing.T) {
+		session := &parser.Session{
+			Entries: []parser.LogEntry{
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "Warmup"},
+						},
+					},
+				},
+				{
+					Type: "assistant",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "Ready to help!"},
+						},
+					},
+				},
+			},
+		}
+
+		result := calculateFirstUserMessage(session)
+		expected := "Ready to help!"
+		if result != expected {
+			t.Errorf("Expected %q, got %q", expected, result)
+		}
+	})
+
+	t.Run("複数のContentブロックからテキストを抽出", func(t *testing.T) {
+		session := &parser.Session{
+			Entries: []parser.LogEntry{
+				{
+					Type: "user",
+					Message: &parser.Message{
+						Content: []parser.Content{
+							{Type: "text", Text: "First part"},
+							{Type: "tool_use", Name: "some_tool"},
+							{Type: "text", Text: "Second part"},
+						},
+					},
+				},
+			},
+		}
+
+		result := calculateFirstUserMessage(session)
+		expected := "First part\nSecond part"
+		if result != expected {
+			t.Errorf("Expected %q, got %q", expected, result)
+		}
+	})
+}
