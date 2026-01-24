@@ -259,6 +259,79 @@ func (s *DatabaseSessionService) Analyze(projectNames []string) (*AnalyzeRespons
 	}, nil
 }
 
+// GetProjectStats returns project-level statistics
+func (s *DatabaseSessionService) GetProjectStats(projectName string) (*ProjectStatsResponse, error) {
+	// プロジェクトの存在確認
+	project, err := s.db.GetProjectByName(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	// プロジェクト統計を取得
+	stats, err := s.db.GetProjectStats(project.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project stats: %w", err)
+	}
+
+	return &ProjectStatsResponse{
+		TotalSessions:            stats.TotalSessions,
+		TotalInputTokens:         stats.TotalInputTokens,
+		TotalOutputTokens:        stats.TotalOutputTokens,
+		TotalCacheCreationTokens: stats.TotalCacheCreationTokens,
+		TotalCacheReadTokens:     stats.TotalCacheReadTokens,
+		TotalTokens:              stats.TotalInputTokens + stats.TotalOutputTokens,
+		AvgTokens:                stats.AvgTokens,
+		FirstSession:             stats.FirstSession,
+		LastSession:              stats.LastSession,
+		ErrorRate:                stats.ErrorRate,
+	}, nil
+}
+
+// GetProjectTimeline returns time-series statistics for a project
+func (s *DatabaseSessionService) GetProjectTimeline(projectName, period string, limit int) (*TimeSeriesResponse, error) {
+	// プロジェクトの存在確認
+	project, err := s.db.GetProjectByName(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	// periodのデフォルト値
+	if period == "" {
+		period = "day"
+	}
+
+	// limitのデフォルト値
+	if limit <= 0 {
+		limit = 30
+	}
+
+	// 時系列統計を取得
+	timeSeriesStats, err := s.db.GetTimeSeriesStats(project.ID, period, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get timeline stats: %w", err)
+	}
+
+	// レスポンスに変換
+	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
+	for _, ts := range timeSeriesStats {
+		dataPoints = append(dataPoints, TimeSeriesDataPoint{
+			PeriodStart:              ts.PeriodStart,
+			PeriodEnd:                ts.PeriodEnd,
+			SessionCount:             ts.SessionCount,
+			TotalInputTokens:         ts.TotalInputTokens,
+			TotalOutputTokens:        ts.TotalOutputTokens,
+			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
+			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
+		})
+	}
+
+	return &TimeSeriesResponse{
+		Period: period,
+		Data:   dataPoints,
+	}, nil
+}
+
 // formatDuration formats a duration as a human-readable string
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

@@ -106,6 +106,8 @@ func (h *Handler) Routes() http.Handler {
 	// API endpoints
 	mux.HandleFunc("GET /api/health", h.healthHandler)
 	mux.HandleFunc("GET /api/projects", h.listProjectsHandler)
+	mux.HandleFunc("GET /api/projects/{name}/stats", h.getProjectStatsHandler)
+	mux.HandleFunc("GET /api/projects/{name}/timeline", h.getProjectTimelineHandler)
 	mux.HandleFunc("GET /api/sessions", h.listSessionsHandler)
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)

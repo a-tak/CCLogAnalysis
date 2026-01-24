@@ -14,6 +14,8 @@ type MockSessionService struct {
 	sessions []SessionSummary
 	session  *SessionDetailResponse
 	analyze  *AnalyzeResponse
+	stats    *ProjectStatsResponse
+	timeline *TimeSeriesResponse
 	err      error
 }
 
@@ -43,6 +45,20 @@ func (m *MockSessionService) Analyze(projectNames []string) (*AnalyzeResponse, e
 		return nil, m.err
 	}
 	return m.analyze, nil
+}
+
+func (m *MockSessionService) GetProjectStats(projectName string) (*ProjectStatsResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.stats, nil
+}
+
+func (m *MockSessionService) GetProjectTimeline(projectName, period string, limit int) (*TimeSeriesResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.timeline, nil
 }
 
 func TestHealthHandler(t *testing.T) {
