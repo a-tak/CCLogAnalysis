@@ -127,6 +127,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/groups", h.listGroupsHandler)
 	mux.HandleFunc("GET /api/groups/{id}", h.getGroupHandler)
 	mux.HandleFunc("GET /api/groups/{id}/stats", h.getGroupStatsHandler)
+	mux.HandleFunc("GET /api/groups/{id}/timeline", h.getGroupTimelineHandler)
 
 	// Scan status endpoint
 	mux.HandleFunc("GET /api/scan/status", h.getScanStatusHandler)

@@ -473,6 +473,51 @@ func (s *DatabaseSessionService) GetProjectGroupStats(groupID int64) (*ProjectGr
 	}, nil
 }
 
+// GetProjectGroupTimeline returns time-series statistics for a project group
+func (s *DatabaseSessionService) GetProjectGroupTimeline(groupID int64, period string, limit int) (*TimeSeriesResponse, error) {
+	// グループの存在確認
+	_, err := s.db.GetProjectGroupByID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	// periodのデフォルト値
+	if period == "" {
+		period = "day"
+	}
+
+	// limitのデフォルト値
+	if limit <= 0 {
+		limit = 30
+	}
+
+	// 時系列統計を取得
+	timeSeriesStats, err := s.db.GetGroupTimeSeriesStats(groupID, period, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group timeline stats: %w", err)
+	}
+
+	// レスポンスに変換
+	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
+	for _, ts := range timeSeriesStats {
+		dataPoints = append(dataPoints, TimeSeriesDataPoint{
+			PeriodStart:              ts.PeriodStart,
+			PeriodEnd:                ts.PeriodEnd,
+			SessionCount:             ts.SessionCount,
+			TotalInputTokens:         ts.TotalInputTokens,
+			TotalOutputTokens:        ts.TotalOutputTokens,
+			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
+			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
+		})
+	}
+
+	return &TimeSeriesResponse{
+		Period: period,
+		Data:   dataPoints,
+	}, nil
+}
+
 // formatDuration formats a duration as a human-readable string
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

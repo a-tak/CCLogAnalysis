@@ -278,4 +278,184 @@ Claude Codeのプロジェクト一覧を取得します。
 
 現時点では未実装。
 
+---
+
+## グループ関連エンドポイント
+
+### 12. プロジェクトグループ一覧取得
+
+プロジェクトグループの一覧を取得します。
+
+**エンドポイント**: `GET /groups`
+
+**レスポンス**:
+```json
+{
+  "groups": [
+    {
+      "id": 1,
+      "name": "CCLogAnalysis",
+      "gitRoot": "/Users/{username}/Documents/GitHub/CCLogAnalysis",
+      "createdAt": "2026-01-25T12:21:39Z",
+      "updatedAt": "2026-01-25T12:21:39Z"
+    }
+  ]
+}
+```
+
+**フィールド説明**:
+- `id`: グループID
+- `name`: グループ名
+- `gitRoot`: Gitリポジトリのルートパス
+- `createdAt`: グループ作成時刻（ISO 8601形式）
+- `updatedAt`: グループ更新時刻（ISO 8601形式）
+
+**ステータスコード**:
+- `200 OK`: 正常
+- `500 Internal Server Error`: サーバーエラー
+
+---
+
+### 13. プロジェクトグループ詳細取得
+
+グループに属するプロジェクト一覧を含む詳細情報を取得します。
+
+**エンドポイント**: `GET /groups/{id}`
+
+**パスパラメータ**:
+- `id`: グループID
+
+**レスポンス**:
+```json
+{
+  "id": 1,
+  "name": "CCLogAnalysis",
+  "gitRoot": "/Users/{username}/Documents/GitHub/CCLogAnalysis",
+  "createdAt": "2026-01-25T12:21:39Z",
+  "updatedAt": "2026-01-25T12:21:39Z",
+  "projects": [
+    {
+      "name": "project-1",
+      "decodedPath": "/Users/{username}/Documents/GitHub/project1",
+      "sessionCount": 53
+    }
+  ]
+}
+```
+
+**ステータスコード**:
+- `200 OK`: 正常
+- `400 Bad Request`: グループIDが不正
+- `404 Not Found`: グループが見つからない
+- `500 Internal Server Error`: サーバーエラー
+
+---
+
+### 14. プロジェクトグループ統計取得
+
+グループ内の全プロジェクトの統計情報を取得します。
+
+**エンドポイント**: `GET /groups/{id}/stats`
+
+**パスパラメータ**:
+- `id`: グループID
+
+**レスポンス**:
+```json
+{
+  "totalProjects": 4,
+  "totalSessions": 75,
+  "totalInputTokens": 273957,
+  "totalOutputTokens": 23199,
+  "totalCacheCreationTokens": 20543766,
+  "totalCacheReadTokens": 418417015,
+  "avgTokens": 3962.08,
+  "firstSession": "2026-01-20T10:00:00Z",
+  "lastSession": "2026-01-25T15:30:00Z",
+  "errorRate": 0.573
+}
+```
+
+**フィールド説明**:
+- `totalProjects`: グループに属するプロジェクト数
+- `totalSessions`: グループ全体のセッション数
+- `totalInputTokens`: 全体の入力トークン数
+- `totalOutputTokens`: 全体の出力トークン数
+- `totalCacheCreationTokens`: キャッシュ作成トークン数
+- `totalCacheReadTokens`: キャッシュ読み取りトークン数
+- `avgTokens`: セッション当たりの平均トークン数
+- `firstSession`: 最初のセッション開始時刻
+- `lastSession`: 最後のセッション終了時刻
+- `errorRate`: エラー発生率
+
+**ステータスコード**:
+- `200 OK`: 正常
+- `400 Bad Request`: グループIDが不正
+- `404 Not Found`: グループが見つからない
+- `500 Internal Server Error`: サーバーエラー
+
+---
+
+### 15. プロジェクトグループタイムライン統計取得
+
+グループ内の全プロジェクトの時系列統計を取得します。
+
+**エンドポイント**: `GET /groups/{id}/timeline`
+
+**パスパラメータ**:
+- `id`: グループID
+
+**クエリパラメータ**:
+- `period` (optional): 集計期間 ("day" | "week" | "month", default: "day")
+- `limit` (optional): 取得するデータポイント数 (default: 30)
+
+**レスポンス**:
+```json
+{
+  "period": "day",
+  "data": [
+    {
+      "periodStart": "2026-01-25T00:00:00Z",
+      "periodEnd": "2026-01-25T00:00:00Z",
+      "sessionCount": 27,
+      "totalInputTokens": 144778,
+      "totalOutputTokens": 12082,
+      "totalCacheCreationTokens": 20543766,
+      "totalCacheReadTokens": 418417015,
+      "totalTokens": 156860
+    },
+    {
+      "periodStart": "2026-01-24T00:00:00Z",
+      "periodEnd": "2026-01-24T00:00:00Z",
+      "sessionCount": 47,
+      "totalInputTokens": 129179,
+      "totalOutputTokens": 11117,
+      "totalCacheCreationTokens": 19731593,
+      "totalCacheReadTokens": 370148894,
+      "totalTokens": 140296
+    }
+  ]
+}
+```
+
+**フィールド説明**:
+- `period`: 集計期間
+- `data`: 時系列データ配列
+  - `periodStart`: 期間開始日（その期間の最初のセッションの日付）
+  - `periodEnd`: 期間終了日（その期間の最後のセッションの日付）
+  - `sessionCount`: その期間のセッション数
+  - `totalInputTokens`: その期間の入力トークン合計
+  - `totalOutputTokens`: その期間の出力トークン合計
+  - `totalCacheCreationTokens`: その期間のキャッシュ作成トークン合計
+  - `totalCacheReadTokens`: その期間のキャッシュ読み取りトークン合計
+  - `totalTokens`: その期間の総トークン数（入力+出力）
+
+**ステータスコード**:
+- `200 OK`: 正常
+- `400 Bad Request`: グループIDが不正、またはperiodパラメータが不正
+- `404 Not Found`: グループが見つからない
+- `500 Internal Server Error`: サーバーエラー
+
+---
+
 将来的に必要に応じて実装予定。

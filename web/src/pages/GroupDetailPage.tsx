@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api/client'
-import type { ProjectGroupDetail, ProjectGroupStats } from '@/lib/api/types'
+import type { ProjectGroupDetail, ProjectGroupStats, TimeSeriesResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { ArrowLeft, Folder, Activity, Zap, TrendingUp, AlertCircle, GitBranch } from 'lucide-react'
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [group, setGroup] = useState<ProjectGroupDetail | null>(null)
   const [stats, setStats] = useState<ProjectGroupStats | null>(null)
+  const [timeline, setTimeline] = useState<TimeSeriesResponse | null>(null)
+  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -23,13 +27,15 @@ export default function GroupDetailPage() {
 
       try {
         const groupId = parseInt(id, 10)
-        const [groupData, statsData] = await Promise.all([
+        const [groupData, statsData, timelineData] = await Promise.all([
           api.getProjectGroup(groupId),
           api.getProjectGroupStats(groupId),
+          api.getProjectGroupTimeline(groupId, period, 30),
         ])
 
         setGroup(groupData)
         setStats(statsData)
+        setTimeline(timelineData)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'グループ情報の取得に失敗しました')
       } finally {
@@ -38,7 +44,7 @@ export default function GroupDetailPage() {
     }
 
     fetchData()
-  }, [id])
+  }, [id, period])
 
   if (loading) {
     return (
@@ -172,6 +178,69 @@ export default function GroupDetailPage() {
         <CardContent>
           <div className="text-3xl font-bold">{formatNumber(stats.avgTokens)}</div>
           <p className="text-sm text-muted-foreground">セッションあたり</p>
+        </CardContent>
+      </Card>
+
+      {/* Timeline Chart */}
+      <Card className="mb-6">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>トークン使用量推移</CardTitle>
+              <CardDescription>時系列でのトークン使用状況</CardDescription>
+            </div>
+            <Tabs value={period} onValueChange={(v: string) => setPeriod(v as 'day' | 'week' | 'month')}>
+              <TabsList>
+                <TabsTrigger value="day">日別</TabsTrigger>
+                <TabsTrigger value="week">週別</TabsTrigger>
+                <TabsTrigger value="month">月別</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {timeline && timeline.data.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={timeline.data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis
+                  dataKey="periodStart"
+                  tickFormatter={(value) => {
+                    const date = new Date(value)
+                    if (period === 'day') return `${date.getMonth() + 1}/${date.getDate()}`
+                    if (period === 'week') return `${date.getMonth() + 1}/${date.getDate()}`
+                    return `${date.getFullYear()}/${date.getMonth() + 1}`
+                  }}
+                />
+                <YAxis />
+                <Tooltip
+                  labelFormatter={(value) => {
+                    const date = new Date(value as string)
+                    return date.toLocaleDateString('ja-JP')
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="totalInputTokens"
+                  stroke="#8884d8"
+                  name="入力トークン"
+                  strokeWidth={2}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="totalOutputTokens"
+                  stroke="#82ca9d"
+                  name="出力トークン"
+                  strokeWidth={2}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              データがありません
+            </div>
+          )}
         </CardContent>
       </Card>
 

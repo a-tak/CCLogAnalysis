@@ -135,6 +135,17 @@ export const api = {
     return fetchApi<ProjectGroupStats>(`/groups/${groupId}/stats`)
   },
 
+  // Get project group timeline
+  async getProjectGroupTimeline(
+    groupId: number,
+    period: 'day' | 'week' | 'month' = 'day',
+    limit = 30
+  ): Promise<TimeSeriesResponse> {
+    return fetchApi<TimeSeriesResponse>(
+      `/groups/${groupId}/timeline?period=${period}&limit=${limit}`
+    )
+  },
+
   // Get scan status
   async getScanStatus(): Promise<ScanStatus> {
     return fetchApi<ScanStatus>('/scan/status')

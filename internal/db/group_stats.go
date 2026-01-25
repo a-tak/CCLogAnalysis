@@ -82,3 +82,95 @@ func (db *DB) GetGroupStats(groupID int64) (*GroupStats, error) {
 
 	return &stats, nil
 }
+
+// GetGroupTimeSeriesStats retrieves time-series statistics for a project group
+// period can be "day", "week", or "month"
+// limit specifies the maximum number of periods to return (default: 30)
+func (db *DB) GetGroupTimeSeriesStats(groupID int64, period string, limit int) ([]TimeSeriesStats, error) {
+	if limit <= 0 {
+		limit = 30
+	}
+
+	// 期間ごとのグループ化SQL
+	var dateFormat string
+	switch period {
+	case "day":
+		dateFormat = "%Y-%m-%d"
+	case "week":
+		// SQLiteのweek開始日は日曜日
+		dateFormat = "%Y-%W"
+	case "month":
+		dateFormat = "%Y-%m"
+	default:
+		return nil, fmt.Errorf("invalid period: %s (must be day, week, or month)", period)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			STRFTIME('%s', s.start_time) as period_group,
+			MIN(DATE(s.start_time)) as period_start,
+			MAX(DATE(s.start_time)) as period_end,
+			COUNT(*) as session_count,
+			COALESCE(SUM(s.total_input_tokens), 0) as total_input_tokens,
+			COALESCE(SUM(s.total_output_tokens), 0) as total_output_tokens,
+			COALESCE(SUM(s.total_cache_creation_tokens), 0) as total_cache_creation_tokens,
+			COALESCE(SUM(s.total_cache_read_tokens), 0) as total_cache_read_tokens
+		FROM project_group_mappings pgm
+		INNER JOIN projects p ON pgm.project_id = p.id
+		INNER JOIN sessions s ON p.id = s.project_id
+		WHERE pgm.group_id = ?
+		GROUP BY period_group
+		ORDER BY period_start DESC
+		LIMIT ?
+	`, dateFormat)
+
+	rows, err := db.conn.Query(query, groupID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query group time series stats: %w", err)
+	}
+	defer rows.Close()
+
+	var timeSeriesStats []TimeSeriesStats
+	for rows.Next() {
+		var stats TimeSeriesStats
+		var periodGroup sql.NullString
+		var periodStartStr, periodEndStr sql.NullString
+
+		err := rows.Scan(
+			&periodGroup,
+			&periodStartStr,
+			&periodEndStr,
+			&stats.SessionCount,
+			&stats.TotalInputTokens,
+			&stats.TotalOutputTokens,
+			&stats.TotalCacheCreationTokens,
+			&stats.TotalCacheReadTokens,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan group time series stats: %w", err)
+		}
+
+		// NULL値をスキップ
+		if !periodStartStr.Valid || !periodEndStr.Valid {
+			continue
+		}
+
+		// 日付文字列をtime.Timeに変換
+		stats.PeriodStart, err = parseDateTime(periodStartStr.String)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse period start: %w", err)
+		}
+		stats.PeriodEnd, err = parseDateTime(periodEndStr.String)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse period end: %w", err)
+		}
+
+		timeSeriesStats = append(timeSeriesStats, stats)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating group time series stats: %w", err)
+	}
+
+	return timeSeriesStats, nil
+}

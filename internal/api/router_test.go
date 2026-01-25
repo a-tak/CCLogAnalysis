@@ -20,11 +20,12 @@ type MockSessionService struct {
 	analyze            *AnalyzeResponse
 	stats              *ProjectStatsResponse
 	timeline           *TimeSeriesResponse
-	ProjectGroups      []ProjectGroupResponse
-	ProjectGroupDetail *ProjectGroupDetailResponse
-	ProjectGroupStats  *ProjectGroupStatsResponse
-	ShouldError        bool
-	err                error
+	ProjectGroups        []ProjectGroupResponse
+	ProjectGroupDetail   *ProjectGroupDetailResponse
+	ProjectGroupStats    *ProjectGroupStatsResponse
+	ProjectGroupTimeline *TimeSeriesResponse
+	ShouldError          bool
+	err                  error
 }
 
 func (m *MockSessionService) ListProjects() ([]ProjectResponse, error) {
@@ -88,6 +89,13 @@ func (m *MockSessionService) GetProjectGroupStats(groupID int64) (*ProjectGroupS
 		return nil, m.err
 	}
 	return m.ProjectGroupStats, nil
+}
+
+func (m *MockSessionService) GetProjectGroupTimeline(groupID int64, period string, limit int) (*TimeSeriesResponse, error) {
+	if m.ShouldError || m.err != nil {
+		return nil, m.err
+	}
+	return m.ProjectGroupTimeline, nil
 }
 
 func TestHealthHandler(t *testing.T) {

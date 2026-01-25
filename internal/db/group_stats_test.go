@@ -168,3 +168,180 @@ func TestGetGroupStats(t *testing.T) {
 		}
 	})
 }
+
+func TestGetGroupTimeSeriesStats(t *testing.T) {
+	// テストデータベースの準備
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	// グループを作成
+	groupID, err := db.CreateProjectGroup("test-group", stringPtr2("/path/to/repo.git"))
+	if err != nil {
+		t.Fatalf("CreateProjectGroup failed: %v", err)
+	}
+
+	// 複数のプロジェクトを作成してグループに追加
+	project1ID, err := db.CreateProject("project-1", "/path/to/project1")
+	if err != nil {
+		t.Fatalf("CreateProject failed: %v", err)
+	}
+	project2ID, err := db.CreateProject("project-2", "/path/to/project2")
+	if err != nil {
+		t.Fatalf("CreateProject failed: %v", err)
+	}
+
+	err = db.AddProjectToGroup(project1ID, groupID)
+	if err != nil {
+		t.Fatalf("AddProjectToGroup failed: %v", err)
+	}
+	err = db.AddProjectToGroup(project2ID, groupID)
+	if err != nil {
+		t.Fatalf("AddProjectToGroup failed: %v", err)
+	}
+
+	// 異なる日付とプロジェクトでセッションを作成
+	sessions := []struct {
+		id        string
+		projectID int64
+		startTime time.Time
+		tokens    int
+	}{
+		{"session-1", project1ID, time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC), 1000},
+		{"session-2", project1ID, time.Date(2026, 1, 20, 14, 0, 0, 0, time.UTC), 1500},
+		{"session-3", project2ID, time.Date(2026, 1, 20, 16, 0, 0, 0, time.UTC), 800},
+		{"session-4", project1ID, time.Date(2026, 1, 21, 10, 0, 0, 0, time.UTC), 2000},
+		{"session-5", project2ID, time.Date(2026, 1, 22, 10, 0, 0, 0, time.UTC), 500},
+	}
+
+	for _, s := range sessions {
+		endTime := s.startTime.Add(time.Hour)
+		_, err := db.conn.Exec(`
+			INSERT INTO sessions (
+				id, project_id, git_branch, start_time, end_time, duration_seconds,
+				total_input_tokens, total_output_tokens,
+				total_cache_creation_tokens, total_cache_read_tokens,
+				error_count
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, s.id, s.projectID, "main",
+			s.startTime.Format(time.RFC3339Nano),
+			endTime.Format(time.RFC3339Nano),
+			3600,
+			s.tokens, 0, 0, 0, 0)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+	}
+
+	t.Run("グループ全体の日別時系列統計を取得できる", func(t *testing.T) {
+		// 日別の時系列統計を取得
+		timeSeriesStats, err := db.GetGroupTimeSeriesStats(groupID, "day", 30)
+		if err != nil {
+			t.Fatalf("GetGroupTimeSeriesStats failed: %v", err)
+		}
+
+		// 3日分のデータがあることを確認
+		if len(timeSeriesStats) != 3 {
+			t.Fatalf("Expected 3 days, got %d", len(timeSeriesStats))
+		}
+
+		// 降順ソート（新しい順）なので、最初は2026-01-22
+		day1 := timeSeriesStats[0]
+		expectedDate1 := time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)
+		if !day1.PeriodStart.Equal(expectedDate1) {
+			t.Errorf("Expected period start %v, got %v", expectedDate1, day1.PeriodStart)
+		}
+		if day1.SessionCount != 1 {
+			t.Errorf("Expected 1 session on 2026-01-22, got %d", day1.SessionCount)
+		}
+		if day1.TotalInputTokens != 500 {
+			t.Errorf("Expected 500 tokens on 2026-01-22, got %d", day1.TotalInputTokens)
+		}
+
+		// 2番目は2026-01-21
+		day2 := timeSeriesStats[1]
+		expectedDate2 := time.Date(2026, 1, 21, 0, 0, 0, 0, time.UTC)
+		if !day2.PeriodStart.Equal(expectedDate2) {
+			t.Errorf("Expected period start %v, got %v", expectedDate2, day2.PeriodStart)
+		}
+		if day2.SessionCount != 1 {
+			t.Errorf("Expected 1 session on 2026-01-21, got %d", day2.SessionCount)
+		}
+		if day2.TotalInputTokens != 2000 {
+			t.Errorf("Expected 2000 tokens on 2026-01-21, got %d", day2.TotalInputTokens)
+		}
+
+		// 3番目は2026-01-20（複数プロジェクトのセッションが集計される）
+		day3 := timeSeriesStats[2]
+		expectedDate3 := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+		if !day3.PeriodStart.Equal(expectedDate3) {
+			t.Errorf("Expected period start %v, got %v", expectedDate3, day3.PeriodStart)
+		}
+		if day3.SessionCount != 3 {
+			t.Errorf("Expected 3 sessions on 2026-01-20, got %d", day3.SessionCount)
+		}
+		expectedTokens := 1000 + 1500 + 800
+		if day3.TotalInputTokens != expectedTokens {
+			t.Errorf("Expected %d tokens on 2026-01-20, got %d", expectedTokens, day3.TotalInputTokens)
+		}
+	})
+
+	t.Run("期間パラメータで集計単位を変更できる", func(t *testing.T) {
+		// 週別の時系列統計を取得（全て同じ週なので1件になる）
+		weekStats, err := db.GetGroupTimeSeriesStats(groupID, "week", 30)
+		if err != nil {
+			t.Fatalf("GetGroupTimeSeriesStats with week failed: %v", err)
+		}
+
+		// 全てのセッションが同じ週なので1週分のデータ
+		if len(weekStats) != 1 {
+			t.Fatalf("Expected 1 week, got %d", len(weekStats))
+		}
+
+		// 全セッションが集計される
+		if weekStats[0].SessionCount != 5 {
+			t.Errorf("Expected 5 sessions in week, got %d", weekStats[0].SessionCount)
+		}
+
+		// 月別の時系列統計を取得（全て同じ月なので1件になる）
+		monthStats, err := db.GetGroupTimeSeriesStats(groupID, "month", 30)
+		if err != nil {
+			t.Fatalf("GetGroupTimeSeriesStats with month failed: %v", err)
+		}
+
+		// 全てのセッションが同じ月なので1ヶ月分のデータ
+		if len(monthStats) != 1 {
+			t.Fatalf("Expected 1 month, got %d", len(monthStats))
+		}
+
+		// 全セッションが集計される
+		if monthStats[0].SessionCount != 5 {
+			t.Errorf("Expected 5 sessions in month, got %d", monthStats[0].SessionCount)
+		}
+	})
+
+	t.Run("セッションがない場合は空配列を返す", func(t *testing.T) {
+		// 空のグループを作成
+		emptyGroupID, err := db.CreateProjectGroup("empty-group", stringPtr2("/path/to/empty.git"))
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// 時系列統計を取得
+		timeSeriesStats, err := db.GetGroupTimeSeriesStats(emptyGroupID, "day", 30)
+		if err != nil {
+			t.Fatalf("GetGroupTimeSeriesStats failed: %v", err)
+		}
+
+		// 空配列が返ることを確認
+		if len(timeSeriesStats) != 0 {
+			t.Errorf("Expected 0 days, got %d", len(timeSeriesStats))
+		}
+	})
+
+	t.Run("無効な期間パラメータでエラーを返す", func(t *testing.T) {
+		_, err := db.GetGroupTimeSeriesStats(groupID, "invalid", 30)
+		if err == nil {
+			t.Error("Expected error for invalid period, got nil")
+		}
+	})
+}

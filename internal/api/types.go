@@ -13,6 +13,7 @@ type SessionService interface {
 	ListProjectGroups() ([]ProjectGroupResponse, error)
 	GetProjectGroup(groupID int64) (*ProjectGroupDetailResponse, error)
 	GetProjectGroupStats(groupID int64) (*ProjectGroupStatsResponse, error)
+	GetProjectGroupTimeline(groupID int64, period string, limit int) (*TimeSeriesResponse, error)
 }
 
 // HealthResponse represents the health check response
