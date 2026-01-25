@@ -7,6 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 )
 
 func TestGetProjectStatsHandler(t *testing.T) {
@@ -26,7 +30,10 @@ func TestGetProjectStatsHandler(t *testing.T) {
 			ErrorRate:                0,
 		},
 	}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	// リクエスト作成
 	req := httptest.NewRequest(http.MethodGet, "/api/projects/test-project/stats", nil)
@@ -62,7 +69,10 @@ func TestGetProjectStatsHandlerNotFound(t *testing.T) {
 	mockService := &MockSessionService{
 		err: fmt.Errorf("project not found"),
 	}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	// 存在しないプロジェクトでリクエスト
 	req := httptest.NewRequest(http.MethodGet, "/api/projects/nonexistent/stats", nil)
@@ -103,7 +113,10 @@ func TestGetProjectTimelineHandler(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	// リクエスト作成（デフォルトはday）
 	req := httptest.NewRequest(http.MethodGet, "/api/projects/test-project/timeline", nil)
@@ -149,7 +162,10 @@ func TestGetProjectTimelineHandlerWithPeriod(t *testing.T) {
 			},
 		},
 	}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	// period=monthでリクエスト
 	req := httptest.NewRequest(http.MethodGet, "/api/projects/test-project/timeline?period=month", nil)

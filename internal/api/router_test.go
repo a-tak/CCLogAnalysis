@@ -6,6 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 )
 
 // MockSessionService is a mock implementation of SessionService for testing
@@ -87,7 +91,10 @@ func (m *MockSessionService) GetProjectGroupStats(groupID int64) (*ProjectGroupS
 }
 
 func TestHealthHandler(t *testing.T) {
-	handler := NewHandler(nil)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(nil, mockScanManager)
 	router := handler.Routes()
 
 	req := httptest.NewRequest("GET", "/api/health", nil)
@@ -112,12 +119,15 @@ func TestHealthHandler(t *testing.T) {
 func TestListProjectsHandler(t *testing.T) {
 	mockService := &MockSessionService{
 		projects: []ProjectResponse{
-			{Name: "project-1", DecodedPath: "/path/to/project-1", SessionCount: 5},
-			{Name: "project-2", DecodedPath: "/path/to/project-2", SessionCount: 3},
+			{Name: "project-1", DecodedPath: "{project-path}/project-1", SessionCount: 5},
+			{Name: "project-2", DecodedPath: "{project-path}/project-2", SessionCount: 3},
 		},
 	}
 
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
 
 	req := httptest.NewRequest("GET", "/api/projects", nil)
@@ -161,7 +171,10 @@ func TestListSessionsHandler(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
 
 	req := httptest.NewRequest("GET", "/api/sessions", nil)
@@ -221,7 +234,10 @@ func TestGetSessionHandler(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
 
 	req := httptest.NewRequest("GET", "/api/sessions/project-1/session-001", nil)
@@ -257,7 +273,10 @@ func TestAnalyzeHandler(t *testing.T) {
 		},
 	}
 
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
 
 	req := httptest.NewRequest("POST", "/api/analyze", nil)

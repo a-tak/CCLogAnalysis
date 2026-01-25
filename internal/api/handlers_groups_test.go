@@ -7,6 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 )
 
 // stringPtr はテスト用のヘルパー関数で、文字列のポインタを返す
@@ -21,21 +25,24 @@ func TestListGroupsHandler(t *testing.T) {
 				{
 					ID:        1,
 					Name:      "test-repo",
-					GitRoot:   stringPtr("/path/to/test-repo.git"),
+					GitRoot:   stringPtr("{git-root}/test-repo"),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				},
 				{
 					ID:        2,
 					Name:      "another-repo",
-					GitRoot:   stringPtr("/path/to/another-repo.git"),
+					GitRoot:   stringPtr("{git-root}/another-repo"),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				},
 			},
 		}
 
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups", nil)
 		w := httptest.NewRecorder()
 
@@ -64,7 +71,10 @@ func TestListGroupsHandler(t *testing.T) {
 			ProjectGroups: []ProjectGroupResponse{},
 		}
 
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups", nil)
 		w := httptest.NewRecorder()
 
@@ -91,17 +101,20 @@ func TestGetGroupHandler(t *testing.T) {
 			ProjectGroupDetail: &ProjectGroupDetailResponse{
 				ID:        1,
 				Name:      "test-repo",
-				GitRoot:   stringPtr("/path/to/test-repo.git"),
+				GitRoot:   stringPtr("{git-root}/test-repo"),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 				Projects: []ProjectResponse{
-					{Name: "project-1", DecodedPath: "/path/to/project1", SessionCount: 5},
-					{Name: "project-2", DecodedPath: "/path/to/project2", SessionCount: 3},
+					{Name: "project-1", DecodedPath: "{project-path}/project1", SessionCount: 5},
+					{Name: "project-2", DecodedPath: "{project-path}/project2", SessionCount: 3},
 				},
 			},
 		}
 
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/1", nil)
 		req.SetPathValue("id", "1")
 		w := httptest.NewRecorder()
@@ -128,7 +141,10 @@ func TestGetGroupHandler(t *testing.T) {
 
 	t.Run("無効なグループIDでエラーを返す", func(t *testing.T) {
 		mockService := &MockSessionService{}
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/invalid", nil)
 		req.SetPathValue("id", "invalid")
 		w := httptest.NewRecorder()
@@ -144,7 +160,10 @@ func TestGetGroupHandler(t *testing.T) {
 		mockService := &MockSessionService{
 			err: fmt.Errorf("group not found"),
 		}
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/999", nil)
 		req.SetPathValue("id", "999")
 		w := httptest.NewRecorder()
@@ -172,7 +191,10 @@ func TestGetGroupStatsHandler(t *testing.T) {
 			},
 		}
 
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/1/stats", nil)
 		req.SetPathValue("id", "1")
 		w := httptest.NewRecorder()
@@ -203,7 +225,10 @@ func TestGetGroupStatsHandler(t *testing.T) {
 
 	t.Run("無効なグループIDでエラーを返す", func(t *testing.T) {
 		mockService := &MockSessionService{}
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/invalid/stats", nil)
 		req.SetPathValue("id", "invalid")
 		w := httptest.NewRecorder()
@@ -219,7 +244,10 @@ func TestGetGroupStatsHandler(t *testing.T) {
 		mockService := &MockSessionService{
 			err: fmt.Errorf("group not found"),
 		}
-		handler := NewHandler(mockService)
+		mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 		req := httptest.NewRequest("GET", "/api/groups/999/stats", nil)
 		req.SetPathValue("id", "999")
 		w := httptest.NewRecorder()

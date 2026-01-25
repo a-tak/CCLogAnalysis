@@ -36,7 +36,7 @@ func createTestData(t *testing.T, database *db.DB) {
 
 	// プロジェクト1作成
 	project1Name := "test-project-1"
-	project1Path := "/path/to/test-project-1"
+	project1Path := "{project-path}/test-project-1"
 	_, err := database.CreateProject(project1Name, project1Path)
 	if err != nil {
 		t.Fatalf("Failed to create project1: %v", err)
@@ -44,7 +44,7 @@ func createTestData(t *testing.T, database *db.DB) {
 
 	// プロジェクト2作成
 	project2Name := "test-project-2"
-	project2Path := "/path/to/test-project-2"
+	project2Path := "{project-path}/test-project-2"
 	_, err = database.CreateProject(project2Name, project2Path)
 	if err != nil {
 		t.Fatalf("Failed to create project2: %v", err)
@@ -99,7 +99,7 @@ func createTestData(t *testing.T, database *db.DB) {
 		ErrorCount: 0,
 	}
 
-	err = database.CreateSession(session1, project1Name)
+	err = database.CreateSession(session1, project1Name, time.Now())
 	if err != nil {
 		t.Fatalf("Failed to create session1: %v", err)
 	}
@@ -141,7 +141,7 @@ func createTestData(t *testing.T, database *db.DB) {
 		ErrorCount: 1,
 	}
 
-	err = database.CreateSession(session2, project1Name)
+	err = database.CreateSession(session2, project1Name, time.Now())
 	if err != nil {
 		t.Fatalf("Failed to create session2: %v", err)
 	}
@@ -184,7 +184,7 @@ func createTestData(t *testing.T, database *db.DB) {
 		ErrorCount: 0,
 	}
 
-	err = database.CreateSession(session3, project2Name)
+	err = database.CreateSession(session3, project2Name, time.Now())
 	if err != nil {
 		t.Fatalf("Failed to create session3: %v", err)
 	}
@@ -223,8 +223,8 @@ func TestDatabaseSessionService_ListProjects(t *testing.T) {
 		if project1.Name != "test-project-1" {
 			t.Errorf("Expected name=test-project-1, got %s", project1.Name)
 		}
-		if project1.DecodedPath != "/path/to/test-project-1" {
-			t.Errorf("Expected path=/path/to/test-project-1, got %s", project1.DecodedPath)
+		if project1.DecodedPath != "{project-path}/test-project-1" {
+			t.Errorf("Expected path={project-path}/test-project-1, got %s", project1.DecodedPath)
 		}
 		if project1.SessionCount != 2 {
 			t.Errorf("Expected 2 sessions, got %d", project1.SessionCount)

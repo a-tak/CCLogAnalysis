@@ -6,13 +6,20 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 )
 
 // TestStaticFileServing tests that static files are served correctly
 func TestStaticFileServing(t *testing.T) {
 	// Create handler with mock service
 	mockService := &MockSessionService{}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	tests := []struct {
 		name        string
@@ -64,7 +71,10 @@ func TestStaticFileServing(t *testing.T) {
 // TestSPARouting tests that SPA routing works correctly
 func TestSPARouting(t *testing.T) {
 	mockService := &MockSessionService{}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	tests := []struct {
 		name        string
@@ -121,10 +131,13 @@ func TestSPARouting(t *testing.T) {
 func TestAPIEndpointsPriority(t *testing.T) {
 	mockService := &MockSessionService{
 		projects: []ProjectResponse{
-			{Name: "test-project", DecodedPath: "/path/to/test", SessionCount: 5},
+			{Name: "test-project", DecodedPath: "{project-path}/test", SessionCount: 5},
 		},
 	}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	tests := []struct {
 		name            string
@@ -183,7 +196,10 @@ func TestAPIEndpointsPriority(t *testing.T) {
 // TestStaticFileContentTypes tests that correct MIME types are set
 func TestStaticFileContentTypes(t *testing.T) {
 	mockService := &MockSessionService{}
-	handler := NewHandler(mockService)
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
 
 	tests := []struct {
 		name            string

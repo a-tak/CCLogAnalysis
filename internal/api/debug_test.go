@@ -45,7 +45,7 @@ func TestDebugStatusHandler(t *testing.T) {
 		}
 
 		// プロジェクトとセッションをDBに追加
-		_, err = database.CreateProject("test-project-1", "/path/to/project1")
+		_, err = database.CreateProject("test-project-1", "{project-path}/project1")
 		if err != nil {
 			t.Fatalf("Failed to create project: %v", err)
 		}
