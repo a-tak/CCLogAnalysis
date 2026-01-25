@@ -66,6 +66,7 @@ go build -o ".server_bin" cmd/server/main.go > /dev/null 2>&1 || {
 
 # 環境変数を設定
 export PORT=$PORT
+export DB_PATH="$REPO_ROOT/bin/ccloganalysis.db"
 case "$MODE" in
     dev)
         export LOG_LEVEL="DEBUG"

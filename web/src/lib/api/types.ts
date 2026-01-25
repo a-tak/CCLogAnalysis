@@ -47,9 +47,9 @@ export interface ToolCall {
 
 // Content block types for message content
 export interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result'
+  type: 'text' | 'thinking' | 'tool_use' | 'tool_result'
 
-  // text type
+  // text & thinking type
   text?: string
 
   // tool_use type

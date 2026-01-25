@@ -110,21 +110,47 @@ make build
 
 ### 実行
 
-```bash
-# デフォルトDBパス使用（実行ファイルと同じディレクトリ）
-./bin/ccloganalysis
+#### server-managementスキル（推奨）
 
-# カスタムDBパス指定
-DB_PATH=/path/to/custom.db ./bin/ccloganalysis
+Claude Code から以下のコマンドでサーバーを管理できます：
+
+```bash
+# 開発モードで起動（初回同期スキップ）
+/server-management start dev
+
+# 本番モードで起動（初回同期実行）
+/server-management start prod
+
+# サーバー停止
+/server-management stop
 ```
 
-サーバーは http://localhost:8080 で起動し、フロントエンドとAPIの両方を提供します。
+**利点:**
+- 空きポート自動検出（8080-8089）
+- PIDファイルによる確実なプロセス管理
+- Graceful shutdown対応
+- ビルド & 起動を自動実行
+
+#### 手動起動
+
+```bash
+# 推奨: bin/ディレクトリのデータベースを使用
+DB_PATH=./bin/ccloganalysis.db ./bin/ccloganalysis
+
+# または、実行ファイルと同じディレクトリのDBを使用（デフォルト）
+./bin/ccloganalysis
+```
+
+**アクセス:**
+- ブラウザで http://localhost:8080 にアクセスするとReact UIが表示されます
+- server-managementで起動時は、ログに表示されるURLを使用してください
 
 **データベース:**
-- デフォルトパス: `bin/ccloganalysis.db`（実行ファイルと同じディレクトリ）
+- 推奨パス: `bin/ccloganalysis.db`
+- デフォルト: 実行ファイルと同じディレクトリの `ccloganalysis.db`
 - 初回起動時に自動的にClaudeプロジェクトのログを同期します
 
-ブラウザで http://localhost:8080 にアクセスするとReact UIが表示されます。
+⚠️ **重要**: 複数の実行ファイルがある場合、それぞれが別のデータベースを使用します。server-managementスキルの使用を推奨します。
 
 ### クリーンビルド
 

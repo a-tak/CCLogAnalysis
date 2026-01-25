@@ -15,6 +15,13 @@ export function ContentBlock({ content }: ContentBlockProps) {
         </div>
       )
 
+    case 'thinking':
+      return (
+        <div className="border-l-2 border-muted-foreground pl-3 text-sm text-muted-foreground italic">
+          {content.text}
+        </div>
+      )
+
     case 'tool_use':
       return <ToolUseBlock toolUse={content} />
 
