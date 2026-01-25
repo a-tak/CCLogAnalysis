@@ -257,18 +257,29 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		})
 
 		// セッションが既にDBに存在するかチェック
-		_, err := db.GetSession(sessionID)
+		existingSession, err := db.GetSession(sessionID)
 		if err == nil {
 			// 既に存在する場合はスキップ
 			log.DebugWithContext("Session already exists, skipping", map[string]interface{}{
-				"project":    projectName,
-				"session_id": sessionID,
+				"project":           projectName,
+				"session_id":        sessionID,
+				"existing_project":  existingSession.ProjectPath,
 			})
 			result.SessionsSkipped++
 			continue
+		} else {
+			log.DebugWithContext("Session not found in DB, will sync", map[string]interface{}{
+				"project":    projectName,
+				"session_id": sessionID,
+				"error":      err.Error(),
+			})
 		}
 
 		// セッションをパース
+		log.DebugWithContext("Parsing session", map[string]interface{}{
+			"project":    projectName,
+			"session_id": sessionID,
+		})
 		session, err := p.ParseSession(projectName, sessionID)
 		if err != nil {
 			errMsg := fmt.Sprintf("%s/%s: %v", projectName, sessionID, err)
@@ -283,13 +294,18 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		}
 
 		// セッションをDBに保存
+		log.DebugWithContext("Saving session to DB", map[string]interface{}{
+			"project":    projectName,
+			"session_id": sessionID,
+		})
 		err = db.CreateSession(session, projectName)
 		if err != nil {
 			// UNIQUE制約エラーの場合は、既に別のプロジェクトで登録済みとしてスキップ
 			if isUniqueConstraintError(err) {
 				log.WarnWithContext("Session already exists (duplicate), skipping", map[string]interface{}{
-					"project":    projectName,
-					"session_id": sessionID,
+					"project":       projectName,
+					"session_id":    sessionID,
+					"error_message": err.Error(),
 				})
 				result.SessionsSkipped++
 				continue

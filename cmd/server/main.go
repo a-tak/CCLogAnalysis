@@ -52,6 +52,21 @@ func main() {
 	p := parser.NewParser(claudeDir)
 	service := api.NewDatabaseSessionService(database, p)
 
+	// Perform initial sync on startup (unless SKIP_INITIAL_SYNC is set)
+	skipInitialSync := os.Getenv("SKIP_INITIAL_SYNC") != ""
+	if !skipInitialSync {
+		fmt.Println("Performing initial sync...")
+		result, err := db.SyncAll(database, p)
+		if err != nil {
+			log.Printf("Warning: Initial sync failed: %v", err)
+		} else {
+			fmt.Printf("Initial sync completed: %d projects, %d sessions synced\n",
+				result.ProjectsProcessed, result.SessionsSynced)
+		}
+	} else {
+		fmt.Println("Skipping initial sync (SKIP_INITIAL_SYNC is set)")
+	}
+
 	// Initialize file watcher
 	watcherConfig := watcher.LoadWatcherConfig()
 	var fileWatcher *watcher.FileWatcher

@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS model_usage (
 CREATE TABLE IF NOT EXISTS log_entries (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
-    uuid TEXT NOT NULL UNIQUE,            -- エントリのUUID
+    uuid TEXT NOT NULL,                   -- エントリのUUID
     parent_uuid TEXT,                     -- 親エントリのUUID
     entry_type TEXT NOT NULL,             -- 'user', 'assistant', 'queue-operation'
     timestamp DATETIME NOT NULL,
@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS log_entries (
     version TEXT,
     request_id TEXT,
 
+    UNIQUE(session_id, uuid),             -- セッション内でUUIDがユニーク
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
 );
 

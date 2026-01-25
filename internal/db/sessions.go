@@ -121,6 +121,11 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 	defer msgStmt.Close()
 
 	for _, entry := range session.Entries {
+		// UUID が空のエントリはスキップ（file-history-snapshot など）
+		if entry.UUID == "" {
+			continue
+		}
+
 		result, err := logStmt.Exec(
 			session.ID, entry.UUID, entry.ParentUUID, entry.Type, entry.Timestamp,
 			entry.Cwd, entry.Version, entry.RequestID,

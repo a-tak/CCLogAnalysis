@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/a-tak/ccloganalysis/internal/db"
 )
 
 // DebugStatusResponse represents the response for debug status endpoint
@@ -61,6 +63,53 @@ func DebugStatusHandler(service *DatabaseSessionService) http.HandlerFunc {
 		}
 
 		// JSONレスポンスを返す
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+// DebugSyncResponse represents the response for debug sync endpoint
+type DebugSyncResponse struct {
+	ProjectsProcessed int      `json:"projects_processed"`
+	SessionsFound     int      `json:"sessions_found"`
+	SessionsSynced    int      `json:"sessions_synced"`
+	SessionsSkipped   int      `json:"sessions_skipped"`
+	ErrorCount        int      `json:"error_count"`
+	Errors            []string `json:"errors,omitempty"`
+}
+
+// DebugSyncHandler returns a handler for the debug sync endpoint (triggers manual sync)
+func DebugSyncHandler(service *DatabaseSessionService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// POST method only
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Execute sync
+		result, err := db.SyncAll(service.db, service.parser)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		// Create response
+		response := DebugSyncResponse{
+			ProjectsProcessed: result.ProjectsProcessed,
+			SessionsFound:     result.SessionsFound,
+			SessionsSynced:    result.SessionsSynced,
+			SessionsSkipped:   result.SessionsSkipped,
+			ErrorCount:        result.ErrorCount,
+			Errors:            result.Errors,
+		}
+
+		// Return JSON response
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(response)

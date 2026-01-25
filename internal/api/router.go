@@ -128,6 +128,7 @@ func (h *Handler) Routes() http.Handler {
 	// Debug endpoint (only available when using DatabaseSessionService)
 	if h.dbService != nil {
 		mux.HandleFunc("GET /api/debug/status", DebugStatusHandler(h.dbService))
+		mux.HandleFunc("POST /api/debug/sync", DebugSyncHandler(h.dbService))
 	}
 
 	// Static files for React frontend

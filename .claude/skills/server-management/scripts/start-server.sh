@@ -69,7 +69,8 @@ export PORT=$PORT
 case "$MODE" in
     dev)
         export LOG_LEVEL="DEBUG"
-        echo "🔧 開発モード(LOG_LEVEL=DEBUG)でサーバーを起動します..."
+        export SKIP_INITIAL_SYNC="1"
+        echo "🔧 開発モード(LOG_LEVEL=DEBUG, 初回同期スキップ)でサーバーを起動します..."
         ;;
     prod)
         export LOG_LEVEL="INFO"
