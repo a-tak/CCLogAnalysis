@@ -8,6 +8,8 @@
   "plansDirectory": "./.claude/plans",
   "permissions": {
     "allow": [
+      "Bash(.claude/skills/server-management/scripts/start-server.sh:*)",
+      "Bash(.claude/skills/server-management/scripts/stop-server.sh:*)",
       "Bash(go test:*)",
       "Bash(make build-frontend:*)",
       "Bash(npm run lint:*)"

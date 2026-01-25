@@ -155,6 +155,36 @@ cd web && npm run dev
 
 フロントエンド開発時はViteの高速なHMR（Hot Module Replacement）が利用できます。
 
+### サーバー管理スクリプト
+
+Claude Codeからサーバーの起動・停止を簡単に行うためのスクリプトを提供しています。
+
+**起動:**
+```bash
+# 開発モード（CORS有効、ファイル監視有効）
+.claude/skills/server-management/scripts/start-server.sh dev
+
+# 本番モード（ビルド後に起動）
+.claude/skills/server-management/scripts/start-server.sh prod
+```
+
+**停止:**
+```bash
+.claude/skills/server-management/scripts/stop-server.sh
+```
+
+**ログ確認:**
+```bash
+tail -f .claude/skills/server-management/server.log
+```
+
+**開発モードのデフォルト環境変数:**
+- `PORT=8080`
+- `ENABLE_CORS=true`
+- `ENABLE_FILE_WATCH=true`
+- `FILE_WATCH_INTERVAL=15`
+- `FILE_WATCH_DEBOUNCE=5`
+
 ### バックエンド開発
 
 サーバーを起動（フロントエンド埋め込み版）：
