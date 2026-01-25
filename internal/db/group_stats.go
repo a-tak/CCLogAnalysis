@@ -61,16 +61,19 @@ func (db *DB) GetGroupStats(groupID int64) (*GroupStats, error) {
 	}
 
 	// NULL値の処理と日時パース
-	if firstSessionStr.Valid {
-		stats.FirstSession, err = parseDateTime(firstSessionStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse first session time: %w", err)
+	// セッション数が0の場合、日時のパースはスキップ
+	if stats.TotalSessions > 0 {
+		if firstSessionStr.Valid {
+			stats.FirstSession, err = parseDateTime(firstSessionStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse first session time: %w", err)
+			}
 		}
-	}
-	if lastSessionStr.Valid {
-		stats.LastSession, err = parseDateTime(lastSessionStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse last session time: %w", err)
+		if lastSessionStr.Valid {
+			stats.LastSession, err = parseDateTime(lastSessionStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse last session time: %w", err)
+			}
 		}
 	}
 	if errorRate.Valid {

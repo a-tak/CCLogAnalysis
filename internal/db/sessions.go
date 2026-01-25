@@ -61,7 +61,7 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 	`
 	_, err = tx.Exec(sessionQuery,
 		session.ID, projectID, session.GitBranch,
-		session.StartTime, session.EndTime, durationSeconds,
+		session.StartTime.Format(time.RFC3339Nano), session.EndTime.Format(time.RFC3339Nano), durationSeconds,
 		session.TotalTokens.InputTokens, session.TotalTokens.OutputTokens,
 		session.TotalTokens.CacheCreationInputTokens, session.TotalTokens.CacheReadInputTokens,
 		session.ErrorCount,

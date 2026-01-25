@@ -10,12 +10,16 @@ import (
 func parseDateTime(s string) (time.Time, error) {
 	// 試すフォーマット一覧（優先度順）
 	formats := []string{
-		time.RFC3339Nano,              // 2006-01-02T15:04:05.999999999Z07:00
-		time.RFC3339,                  // 2006-01-02T15:04:05Z07:00
-		"2006-01-02 15:04:05.999999-07:00", // 2026-01-20 10:00:00.123456+00:00
-		"2006-01-02 15:04:05-07:00",        // 2026-01-20 10:00:00+00:00
-		"2006-01-02 15:04:05",         // 2026-01-20 10:00:00
-		"2006-01-02",                  // 2026-01-20
+		time.RFC3339Nano,                       // 2006-01-02T15:04:05.999999999Z07:00
+		time.RFC3339,                           // 2006-01-02T15:04:05Z07:00
+		"2006-01-02 15:04:05.999999999 -0700 MST", // 2026-01-10 06:13:10.028 +0000 UTC (Go time.Time.String() format)
+		"2006-01-02 15:04:05.999999 -0700 MST", // 2026-01-10 06:13:10.123456 +0000 UTC
+		"2006-01-02 15:04:05.999 -0700 MST",    // 2026-01-10 06:13:10.028 +0000 UTC
+		"2006-01-02 15:04:05 -0700 MST",        // 2026-01-10 06:13:10 +0000 UTC
+		"2006-01-02 15:04:05.999999-07:00",     // 2026-01-20 10:00:00.123456+00:00
+		"2006-01-02 15:04:05-07:00",            // 2026-01-20 10:00:00+00:00
+		"2006-01-02 15:04:05",                  // 2026-01-20 10:00:00
+		"2006-01-02",                           // 2026-01-20
 	}
 
 	for _, format := range formats {
@@ -99,16 +103,19 @@ func (db *DB) GetProjectStats(projectID int64) (*ProjectStats, error) {
 	}
 
 	// NULL値の処理と日時パース
-	if firstSessionStr.Valid {
-		stats.FirstSession, err = parseDateTime(firstSessionStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse first session time: %w", err)
+	// セッション数が0の場合、日時のパースはスキップ
+	if stats.TotalSessions > 0 {
+		if firstSessionStr.Valid {
+			stats.FirstSession, err = parseDateTime(firstSessionStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse first session time: %w", err)
+			}
 		}
-	}
-	if lastSessionStr.Valid {
-		stats.LastSession, err = parseDateTime(lastSessionStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse last session time: %w", err)
+		if lastSessionStr.Valid {
+			stats.LastSession, err = parseDateTime(lastSessionStr.String)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse last session time: %w", err)
+			}
 		}
 	}
 	if errorRate.Valid {
