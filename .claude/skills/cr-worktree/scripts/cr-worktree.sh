@@ -131,10 +131,100 @@ sync_main_branch_with_remote() {
   exit 1
 }
 
+# WIPドキュメント生成関数
+# 引数:
+#   $1: 説明文（タスク名）
+#   $2: ワークツリーパス
+generate_wip_document() {
+  local TASK_DESCRIPTION="$1"
+  local WORKTREE_PATH="$2"
+  local WIP_DIR="$WORKTREE_PATH/docs/WIP"
+
+  # 現在の日付取得
+  local TODAY=$(date +"%Y-%m-%d")
+
+  # ファイル名用のタスク名（50文字制限）
+  local TASK_NAME_SHORT="${TASK_DESCRIPTION:0:50}"
+
+  # ファイル名から無効な文字（スラッシュなど）を削除
+  TASK_NAME_SHORT="${TASK_NAME_SHORT//\//}"
+
+  # WIPファイル名
+  local WIP_FILE="$WIP_DIR/${TODAY}_${TASK_NAME_SHORT}.md"
+
+  # WIPディレクトリ存在確認
+  if [ ! -d "$WIP_DIR" ]; then
+    echo "⚠️  警告: WIPディレクトリが見つかりません: $WIP_DIR"
+    echo "   WIPドキュメント生成をスキップします"
+    return 1
+  fi
+
+  # WIPドキュメント生成（既存フォーマット準拠）
+  cat > "$WIP_FILE" <<'EOF'
+# ${TASK_DESCRIPTION}
+
+**作業日**: ${TODAY}
+
+---
+
+## 概要
+
+${TASK_DESCRIPTION}
+
+---
+
+## 実装内容
+
+### Phase 1: 実装レイヤー
+
+（ここに実装内容を記載）
+
+---
+
+## 完了チェックリスト
+
+- [ ] 実装完了
+- [ ] テスト作成・パス
+- [ ] ドキュメント更新
+- [ ] コミット実施
+
+---
+
+## 次のステップ
+
+（次に実施すべき作業を記載）
+
+---
+
+## 参考情報
+
+（関連ドキュメント、参考URLなど）
+
+---
+
+**このドキュメントは /cr-worktree スキルで自動生成されました。**
+**作業内容に応じて適宜更新してください。**
+EOF
+
+  # 変数展開（heredoc内の変数を実際の値に置換）
+  # sed の置換コマンドで | を区切り文字として使用（/ が含まれる説明文に対応）
+  sed -i '' "s|\${TASK_DESCRIPTION}|${TASK_DESCRIPTION}|g" "$WIP_FILE"
+  sed -i '' "s|\${TODAY}|${TODAY}|g" "$WIP_FILE"
+
+  if [ $? -eq 0 ]; then
+    echo "✅ WIPドキュメント生成完了: $WIP_FILE"
+    return 0
+  else
+    echo "⚠️  警告: WIPドキュメント生成に失敗しました"
+    return 1
+  fi
+}
+
 # 引数の取得
 ARG="$1"
 FROM_CURRENT=false
 WITH_ISSUE_COMMAND=false
+WITH_DESCRIPTION=""
 
 # オプション解析
 for arg in "$@"; do
@@ -144,6 +234,9 @@ for arg in "$@"; do
       ;;
     --with-issue-command)
       WITH_ISSUE_COMMAND=true
+      ;;
+    --with-description=*)
+      WITH_DESCRIPTION="${arg#*=}"
       ;;
   esac
 done
@@ -318,6 +411,19 @@ elif [[ "$ARG" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
 
   echo "✅ 環境整備完了"
   echo ""
+
+  # 説明文経由の場合、WIPドキュメント生成
+  if [ -n "$WITH_DESCRIPTION" ]; then
+    echo "📝 WIPドキュメントを生成中..."
+    echo ""
+
+    if generate_wip_document "$WITH_DESCRIPTION" "$WORKTREE_PATH"; then
+      echo ""
+    else
+      echo "   （WIPドキュメント生成に失敗しましたが、処理を続行します）"
+      echo ""
+    fi
+  fi
 
   # Claude Code起動
   echo "🚀 Claude Codeを新しいターミナルウィンドウで起動中..."
