@@ -27,6 +27,11 @@ builds:
       - amd64
       - arm64
 
+    # Exclude Windows ARM64 (not commonly used)
+    ignore:
+      - goos: windows
+        goarch: arm64
+
     # ldflags for optimization and version information
     ldflags:
       - -s -w
