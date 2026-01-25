@@ -30,6 +30,7 @@ func (h *Handler) getScanStatusHandler(w http.ResponseWriter, r *http.Request) {
 		ProjectsProcessed: progress.ProjectsProcessed,
 		SessionsFound:     progress.SessionsFound,
 		SessionsSynced:    progress.SessionsSynced,
+		SessionsSkipped:   progress.SessionsSkipped,
 		ErrorCount:        progress.ErrorCount,
 		StartedAt:         progress.StartedAt.Format(time.RFC3339),
 		CompletedAt:       completedAt,

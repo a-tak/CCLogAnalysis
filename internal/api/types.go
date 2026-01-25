@@ -206,6 +206,7 @@ type ScanStatusResponse struct {
 	ProjectsProcessed int     `json:"projectsProcessed"`
 	SessionsFound     int     `json:"sessionsFound"`
 	SessionsSynced    int     `json:"sessionsSynced"`
+	SessionsSkipped   int     `json:"sessionsSkipped"`
 	ErrorCount        int     `json:"errorCount"`
 	StartedAt         string  `json:"startedAt"`
 	CompletedAt       *string `json:"completedAt,omitempty"`

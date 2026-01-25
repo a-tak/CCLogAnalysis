@@ -10,6 +10,18 @@ import (
 	"github.com/a-tak/ccloganalysis/internal/parser"
 )
 
+// SyncProgressCallback is called during sync to report progress
+type SyncProgressCallback func(progress SyncProgressUpdate)
+
+// SyncProgressUpdate represents incremental progress during sync
+type SyncProgressUpdate struct {
+	ProjectsProcessed int // 処理済みプロジェクト数
+	SessionsFound     int // 発見したセッション数（累積、重複を含む）
+	SessionsSynced    int // 同期したセッション数（累積、重複を除く）
+	SessionsSkipped   int // スキップしたセッション数（累積、既存または重複）
+	ErrorCount        int // エラー数（累積）
+}
+
 // SyncResult represents the result of a sync operation
 type SyncResult struct {
 	ProjectsProcessed int
@@ -22,12 +34,21 @@ type SyncResult struct {
 
 // SyncAll synchronizes all projects from the file system to the database
 func SyncAll(db *DB, p *parser.Parser) (*SyncResult, error) {
-	// デフォルトロガーを使用
-	return SyncAllWithLogger(db, p, logger.New())
+	return SyncAllWithCallback(db, p, nil)
+}
+
+// SyncAllWithCallback synchronizes all projects with progress callbacks
+func SyncAllWithCallback(db *DB, p *parser.Parser, callback SyncProgressCallback) (*SyncResult, error) {
+	return SyncAllWithLoggerAndCallback(db, p, logger.New(), callback)
 }
 
 // SyncAllWithLogger synchronizes all projects from the file system to the database with custom logger
 func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResult, error) {
+	return SyncAllWithLoggerAndCallback(db, p, log, nil)
+}
+
+// SyncAllWithLoggerAndCallback synchronizes all projects with custom logger and callbacks
+func SyncAllWithLoggerAndCallback(db *DB, p *parser.Parser, log *logger.Logger, callback SyncProgressCallback) (*SyncResult, error) {
 	result := &SyncResult{}
 
 	log.Info("Starting SyncAll")
@@ -60,6 +81,17 @@ func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResul
 			})
 			result.ErrorCount++
 			result.Errors = append(result.Errors, errMsg)
+
+			// エラー発生時もコールバックで進捗報告
+			if callback != nil {
+				callback(SyncProgressUpdate{
+					ProjectsProcessed: result.ProjectsProcessed,
+					SessionsFound:     result.SessionsFound,
+					SessionsSynced:    result.SessionsSynced,
+					SessionsSkipped:   result.SessionsSkipped,
+					ErrorCount:        result.ErrorCount,
+				})
+			}
 			continue
 		}
 
@@ -75,6 +107,17 @@ func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResul
 		result.SessionsSkipped += syncResult.SessionsSkipped
 		result.ErrorCount += syncResult.ErrorCount
 		result.Errors = append(result.Errors, syncResult.Errors...)
+
+		// コールバックで進捗を報告
+		if callback != nil {
+			callback(SyncProgressUpdate{
+				ProjectsProcessed: result.ProjectsProcessed,
+				SessionsFound:     result.SessionsFound,
+				SessionsSynced:    result.SessionsSynced,
+				SessionsSkipped:   result.SessionsSkipped,
+				ErrorCount:        result.ErrorCount,
+			})
+		}
 
 		// 10プロジェクトごと、または最後のプロジェクトの場合にグループを同期
 		// これにより、スキャン進行中でもグループが徐々に表示される

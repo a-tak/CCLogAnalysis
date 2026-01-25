@@ -2,8 +2,10 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,6 +174,105 @@ func TestGetProgress_ThreadSafe(t *testing.T) {
 	// 全てのgoroutineが完了するのを待つ
 	for i := 0; i < 10; i++ {
 		<-done
+	}
+
+	// クリーンアップ
+	manager.Stop()
+}
+
+func TestScanManagerProgressUpdates(t *testing.T) {
+	// テスト用データベースを作成
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "test.db")
+	database, err := db.NewDB(dbPath)
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+	defer database.Close()
+
+	// テスト用のClaudeプロジェクトディレクトリを作成
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	if err := os.MkdirAll(claudeDir, 0755); err != nil {
+		t.Fatalf("Failed to create claude directory: %v", err)
+	}
+
+	// 複数のテスト用プロジェクトとセッションを作成（スキャンに時間がかかるように）
+	sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"SESSION_ID","uuid":"UUID","cwd":"/test","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T10:00:05Z","sessionId":"SESSION_ID","uuid":"UUID-2","parentUuid":"UUID","cwd":"/test","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+
+	// 3つのプロジェクトを作成
+	for i := 1; i <= 3; i++ {
+		projectDir := filepath.Join(claudeDir, fmt.Sprintf("test-project-%d", i))
+		if err := os.MkdirAll(projectDir, 0755); err != nil {
+			t.Fatalf("Failed to create project%d directory: %v", i, err)
+		}
+
+		// 各プロジェクトに2つのセッションを作成
+		for j := 1; j <= 2; j++ {
+			sessionID := fmt.Sprintf("session-%d-%d", i, j)
+			sessionPath := filepath.Join(projectDir, sessionID+".jsonl")
+			content := strings.ReplaceAll(sessionContent, "SESSION_ID", sessionID)
+			content = strings.ReplaceAll(content, "UUID", fmt.Sprintf("uuid-%d-%d", i, j))
+			if err := os.WriteFile(sessionPath, []byte(content), 0644); err != nil {
+				t.Fatalf("Failed to write session file: %v", err)
+			}
+		}
+	}
+
+	// テスト用パーサーを作成
+	p := parser.NewParser(claudeDir)
+
+	// ScanManagerを作成
+	manager := NewScanManager(database, p)
+
+	// スキャン開始直後の状態を確認
+	ctx := context.Background()
+	err = manager.StartInitialScan(ctx)
+	if err != nil {
+		t.Fatalf("Failed to start scan: %v", err)
+	}
+
+	// スキャン開始直後、running状態になっていることを確認
+	initialProgress := manager.GetProgress()
+	if initialProgress.Status != ScanStatusRunning {
+		t.Errorf("Expected status to be running immediately after start, got %s", initialProgress.Status)
+	}
+
+	// 進捗が更新されるまでポーリング
+	timeout := time.After(5 * time.Second)
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+
+	var progressUpdates []ScanProgress
+	progressUpdates = append(progressUpdates, initialProgress)
+
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("Timeout waiting for scan completion")
+		case <-ticker.C:
+			progress := manager.GetProgress()
+			progressUpdates = append(progressUpdates, progress)
+
+			// スキャン完了したら終了
+			if progress.Status == ScanStatusCompleted || progress.Status == ScanStatusFailed {
+				goto done
+			}
+		}
+	}
+done:
+
+	// 最終結果を確認
+	finalProgress := manager.GetProgress()
+	if finalProgress.Status != ScanStatusCompleted {
+		t.Errorf("Expected final status to be completed, got %s", finalProgress.Status)
+	}
+	if finalProgress.SessionsSynced != 6 {
+		t.Errorf("Expected 6 sessions synced (3 projects * 2 sessions), got %d", finalProgress.SessionsSynced)
+	}
+	if finalProgress.ProjectsProcessed != 3 {
+		t.Errorf("Expected 3 projects processed, got %d", finalProgress.ProjectsProcessed)
 	}
 
 	// クリーンアップ

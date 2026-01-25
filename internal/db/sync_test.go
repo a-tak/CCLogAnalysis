@@ -537,6 +537,88 @@ func TestSyncResult_ErrorDetails(t *testing.T) {
 }
 */
 
+func TestSyncAllWithCallback(t *testing.T) {
+	database, _ := setupTestDB(t)
+	defer database.Close()
+
+	claudeDir := setupTestClaudeDir(t)
+	p := parser.NewParser(claudeDir)
+
+	t.Run("コールバックが呼び出される", func(t *testing.T) {
+		// コールバック呼び出しを記録
+		var updates []SyncProgressUpdate
+		callback := func(update SyncProgressUpdate) {
+			updates = append(updates, update)
+		}
+
+		// コールバック付きでSyncAll実行
+		result, err := SyncAllWithCallback(database, p, callback)
+		if err != nil {
+			t.Fatalf("SyncAllWithCallback failed: %v", err)
+		}
+
+		// コールバックが呼び出されたことを確認
+		if len(updates) == 0 {
+			t.Error("Expected callback to be called, but got no updates")
+		}
+
+		// プロジェクト数と一致することを確認（2プロジェクト）
+		if len(updates) != 2 {
+			t.Errorf("Expected 2 callback calls (one per project), got %d", len(updates))
+		}
+
+		// 進捗が増加していることを確認
+		for i := 1; i < len(updates); i++ {
+			if updates[i].ProjectsProcessed <= updates[i-1].ProjectsProcessed {
+				t.Errorf("Progress should increase, got %d -> %d",
+					updates[i-1].ProjectsProcessed, updates[i].ProjectsProcessed)
+			}
+		}
+
+		// 最終結果と最後のコールバックが一致することを確認
+		lastUpdate := updates[len(updates)-1]
+		if lastUpdate.ProjectsProcessed != result.ProjectsProcessed {
+			t.Errorf("Last callback ProjectsProcessed=%d, result=%d",
+				lastUpdate.ProjectsProcessed, result.ProjectsProcessed)
+		}
+		if lastUpdate.SessionsFound != result.SessionsFound {
+			t.Errorf("Last callback SessionsFound=%d, result=%d",
+				lastUpdate.SessionsFound, result.SessionsFound)
+		}
+		if lastUpdate.SessionsSynced != result.SessionsSynced {
+			t.Errorf("Last callback SessionsSynced=%d, result=%d",
+				lastUpdate.SessionsSynced, result.SessionsSynced)
+		}
+		if lastUpdate.SessionsSkipped != result.SessionsSkipped {
+			t.Errorf("Last callback SessionsSkipped=%d, result=%d",
+				lastUpdate.SessionsSkipped, result.SessionsSkipped)
+		}
+	})
+}
+
+func TestSyncAllWithNilCallback(t *testing.T) {
+	database, _ := setupTestDB(t)
+	defer database.Close()
+
+	claudeDir := setupTestClaudeDir(t)
+	p := parser.NewParser(claudeDir)
+
+	t.Run("nilコールバックでもエラーが発生しない", func(t *testing.T) {
+		result, err := SyncAllWithCallback(database, p, nil)
+		if err != nil {
+			t.Fatalf("SyncAllWithCallback with nil callback failed: %v", err)
+		}
+
+		// 結果が正しいことを確認
+		if result.ProjectsProcessed != 2 {
+			t.Errorf("Expected 2 projects processed, got %d", result.ProjectsProcessed)
+		}
+		if result.SessionsSynced != 3 {
+			t.Errorf("Expected 3 sessions synced, got %d", result.SessionsSynced)
+		}
+	})
+}
+
 func TestGitRootDetection(t *testing.T) {
 	database, _ := setupTestDB(t)
 	defer database.Close()

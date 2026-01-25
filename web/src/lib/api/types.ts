@@ -185,6 +185,7 @@ export interface ScanStatus {
   projectsProcessed: number
   sessionsFound: number
   sessionsSynced: number
+  sessionsSkipped: number
   errorCount: number
   startedAt: string
   completedAt?: string

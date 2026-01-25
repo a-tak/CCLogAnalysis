@@ -26,6 +26,7 @@ type ScanProgress struct {
 	ProjectsProcessed int
 	SessionsFound     int
 	SessionsSynced    int
+	SessionsSkipped   int
 	ErrorCount        int
 	StartedAt         time.Time
 	CompletedAt       *time.Time
@@ -107,8 +108,19 @@ func (m *ScanManager) Stop() {
 func (m *ScanManager) runScan(ctx context.Context) {
 	defer m.wg.Done()
 
-	// スキャン実行
-	result, err := db.SyncAll(m.db, m.parser)
+	// コールバック関数を定義（進捗をリアルタイム更新）
+	progressCallback := func(update db.SyncProgressUpdate) {
+		m.mu.Lock()
+		m.progress.ProjectsProcessed = update.ProjectsProcessed
+		m.progress.SessionsFound = update.SessionsFound
+		m.progress.SessionsSynced = update.SessionsSynced
+		m.progress.SessionsSkipped = update.SessionsSkipped
+		m.progress.ErrorCount = update.ErrorCount
+		m.mu.Unlock()
+	}
+
+	// コールバック付きでスキャン実行
+	result, err := db.SyncAllWithCallback(m.db, m.parser, progressCallback)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -124,11 +136,12 @@ func (m *ScanManager) runScan(ctx context.Context) {
 		return
 	}
 
-	// 成功時
+	// 成功時（最終結果を反映）
 	m.progress.Status = ScanStatusCompleted
 	m.progress.ProjectsProcessed = result.ProjectsProcessed
 	m.progress.SessionsFound = result.SessionsFound
 	m.progress.SessionsSynced = result.SessionsSynced
+	m.progress.SessionsSkipped = result.SessionsSkipped
 	m.progress.ErrorCount = result.ErrorCount
 	m.progress.CompletedAt = &now
 
