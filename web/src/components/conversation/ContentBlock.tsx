@@ -7,20 +7,21 @@ interface ContentBlockProps {
 }
 
 export function ContentBlock({ content }: ContentBlockProps) {
+  if (!content || typeof content !== 'object') {
+    return null
+  }
+
   switch (content.type) {
     case 'text':
       return (
         <div className="whitespace-pre-wrap break-words">
-          {content.text}
+          {content.text || ''}
         </div>
       )
 
     case 'thinking':
-      return (
-        <div className="border-l-2 border-muted-foreground pl-3 text-sm text-muted-foreground italic">
-          {content.text}
-        </div>
-      )
+      // thinkingタイプはテキストがないので何も表示しない
+      return null
 
     case 'tool_use':
       return <ToolUseBlock toolUse={content} />
@@ -29,7 +30,6 @@ export function ContentBlock({ content }: ContentBlockProps) {
       return <ToolResultBlock toolResult={content} />
 
     default:
-      console.warn('Unknown content type:', content)
-      return <div className="text-muted-foreground">Unknown content type</div>
+      return null
   }
 }

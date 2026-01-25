@@ -33,7 +33,7 @@ export function ToolResultBlock({ toolResult }: ToolResultBlockProps) {
             "whitespace-pre-wrap break-words font-mono",
             isError ? "bg-destructive/20" : "bg-muted"
           )}>
-            <code>{toolResult.content}</code>
+            <code>{typeof toolResult.content === 'string' ? toolResult.content : JSON.stringify(toolResult.content, null, 2)}</code>
           </pre>
         </div>
       )}

@@ -245,7 +245,7 @@ export function SessionDetailPage() {
                   </TableCell>
                   <TableCell className="font-medium">{call.name}</TableCell>
                   <TableCell className="max-w-md truncate text-muted-foreground">
-                    {JSON.stringify(call.input)}
+                    {JSON.stringify(call.input || {})}
                   </TableCell>
                   <TableCell>
                     {call.isError ? (

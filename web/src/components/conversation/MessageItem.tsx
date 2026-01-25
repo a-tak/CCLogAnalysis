@@ -12,6 +12,11 @@ function formatDate(isoString: string): string {
 }
 
 export function MessageItem({ message }: MessageItemProps) {
+  // messageオブジェクトが不正な場合のガード
+  if (!message || typeof message !== 'object' || !message.type || !Array.isArray(message.content)) {
+    return <div className="text-destructive text-sm">Invalid message data</div>
+  }
+
   const isUser = message.type === 'user'
 
   return (
