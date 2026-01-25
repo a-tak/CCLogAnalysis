@@ -77,12 +77,12 @@ func TestSyncProjectGroups(t *testing.T) {
 		}
 	})
 
-	t.Run("Git Rootがnullのプロジェクトはグループ化されない", func(t *testing.T) {
+	t.Run("Git Rootがnullのプロジェクトは独立グループとして作成される", func(t *testing.T) {
 		newDB, _ := setupTestDB(t)
 		defer newDB.Close()
 
 		// Git Root未設定のプロジェクトを作成
-		_, err := newDB.CreateProject("no-git-project", "/path/to/no-git")
+		projectID, err := newDB.CreateProject("no-git-project", "/path/to/no-git")
 		if err != nil {
 			t.Fatalf("CreateProject failed: %v", err)
 		}
@@ -93,13 +93,35 @@ func TestSyncProjectGroups(t *testing.T) {
 			t.Fatalf("SyncProjectGroups failed: %v", err)
 		}
 
-		// グループが作成されないことを確認
+		// 独立グループが1つ作成されたことを確認
 		groups, err := newDB.ListProjectGroups()
 		if err != nil {
 			t.Fatalf("ListProjectGroups failed: %v", err)
 		}
-		if len(groups) != 0 {
-			t.Errorf("Expected 0 groups, got %d", len(groups))
+		if len(groups) != 1 {
+			t.Fatalf("Expected 1 group, got %d", len(groups))
+		}
+
+		// グループ名がプロジェクト名であることを確認
+		if groups[0].Name != "no-git-project" {
+			t.Errorf("Expected group name 'no-git-project', got '%s'", groups[0].Name)
+		}
+
+		// グループのgit_rootがNULLであることを確認
+		if groups[0].GitRoot != nil {
+			t.Errorf("Expected git_root to be nil, got '%v'", groups[0].GitRoot)
+		}
+
+		// グループに1つのプロジェクトが含まれることを確認
+		projects, err := newDB.GetProjectsByGroupID(groups[0].ID)
+		if err != nil {
+			t.Fatalf("GetProjectsByGroupID failed: %v", err)
+		}
+		if len(projects) != 1 {
+			t.Errorf("Expected 1 project in group, got %d", len(projects))
+		}
+		if projects[0].ID != projectID {
+			t.Errorf("Expected project ID %d, got %d", projectID, projects[0].ID)
 		}
 	})
 

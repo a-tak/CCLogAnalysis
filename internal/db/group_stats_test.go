@@ -5,13 +5,18 @@ import (
 	"time"
 )
 
+// stringPtr はテスト用のヘルパー関数で、文字列のポインタを返す
+func stringPtr2(s string) *string {
+	return &s
+}
+
 func TestGetGroupStats(t *testing.T) {
 	db, _ := setupTestDB(t)
 	defer db.Close()
 
 	t.Run("グループ全体の統計を取得できる", func(t *testing.T) {
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("test-group", "/path/to/repo.git")
+		groupID, err := db.CreateProjectGroup("test-group", stringPtr2("/path/to/repo.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -101,7 +106,7 @@ func TestGetGroupStats(t *testing.T) {
 
 	t.Run("プロジェクトがないグループで統計がゼロになる", func(t *testing.T) {
 		// 空のグループを作成
-		groupID, err := db.CreateProjectGroup("empty-group", "/path/to/empty.git")
+		groupID, err := db.CreateProjectGroup("empty-group", stringPtr2("/path/to/empty.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -129,7 +134,7 @@ func TestGetGroupStats(t *testing.T) {
 
 	t.Run("セッションがないプロジェクトのみのグループで統計がゼロになる", func(t *testing.T) {
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("no-session-group", "/path/to/no-session.git")
+		groupID, err := db.CreateProjectGroup("no-session-group", stringPtr2("/path/to/no-session.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}

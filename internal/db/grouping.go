@@ -17,14 +17,17 @@ func (db *DB) SyncProjectGroups() error {
 
 	// Git Rootごとにプロジェクトをグループ化
 	groupMap := make(map[string][]*ProjectRow)
-	for _, project := range projects {
-		// Git Rootが設定されていないプロジェクトはスキップ
-		if project.GitRoot == nil || *project.GitRoot == "" {
-			continue
-		}
+	standaloneProjects := []*ProjectRow{}
 
-		gitRoot := *project.GitRoot
-		groupMap[gitRoot] = append(groupMap[gitRoot], project)
+	for _, project := range projects {
+		if project.GitRoot != nil && *project.GitRoot != "" {
+			// Git Rootがある場合はグループ化
+			gitRoot := *project.GitRoot
+			groupMap[gitRoot] = append(groupMap[gitRoot], project)
+		} else {
+			// Git Rootがない場合は独立グループとして扱う
+			standaloneProjects = append(standaloneProjects, project)
+		}
 	}
 
 	// 各Git Rootに対してグループを作成・更新
@@ -34,7 +37,8 @@ func (db *DB) SyncProjectGroups() error {
 		if err != nil {
 			// グループが存在しない場合は新規作成
 			groupName := generateGroupName(gitRoot)
-			groupID, err := db.CreateProjectGroup(groupName, gitRoot)
+			gitRootPtr := &gitRoot
+			groupID, err := db.CreateProjectGroup(groupName, gitRootPtr)
 			if err != nil {
 				log.Printf("Warning: failed to create project group for git_root %s: %v", gitRoot, err)
 				continue
@@ -56,6 +60,37 @@ func (db *DB) SyncProjectGroups() error {
 				if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 					log.Printf("Warning: failed to add project %s to group %s: %v", project.Name, group.Name, err)
 				}
+			}
+		}
+	}
+
+	// Git Rootがないプロジェクトを独立グループとして作成
+	for _, project := range standaloneProjects {
+		groupName := project.Name
+		// グループが既に存在するか確認
+		group, err := db.GetProjectGroupByName(groupName)
+		if err != nil {
+			// グループが存在しない場合は新規作成（git_root = NULL）
+			groupID, err := db.CreateProjectGroup(groupName, nil)
+			if err != nil {
+				log.Printf("Warning: failed to create standalone group for project %s: %v", project.Name, err)
+				continue
+			}
+
+			// 新規作成したグループを取得
+			group, err = db.GetProjectGroupByID(groupID)
+			if err != nil {
+				log.Printf("Warning: failed to get created standalone group: %v", err)
+				continue
+			}
+		}
+
+		// プロジェクトをグループに追加（重複は無視）
+		err = db.AddProjectToGroup(project.ID, group.ID)
+		if err != nil {
+			// 重複エラーは無視（既に追加済み）
+			if !strings.Contains(err.Error(), "UNIQUE constraint failed") {
+				log.Printf("Warning: failed to add project %s to standalone group: %v", project.Name, err)
 			}
 		}
 	}

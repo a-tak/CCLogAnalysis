@@ -166,7 +166,7 @@ type TimeSeriesResponse struct {
 type ProjectGroupResponse struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
-	GitRoot   string    `json:"gitRoot"`
+	GitRoot   *string   `json:"gitRoot,omitempty"` // NULL可能
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -180,7 +180,7 @@ type ProjectGroupListResponse struct {
 type ProjectGroupDetailResponse struct {
 	ID        int64             `json:"id"`
 	Name      string            `json:"name"`
-	GitRoot   string            `json:"gitRoot"`
+	GitRoot   *string           `json:"gitRoot,omitempty"` // NULL可能
 	CreatedAt time.Time         `json:"createdAt"`
 	UpdatedAt time.Time         `json:"updatedAt"`
 	Projects  []ProjectResponse `json:"projects"`

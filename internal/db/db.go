@@ -14,6 +14,9 @@ var schemaSQL string
 //go:embed migrations/003_project_groups.sql
 var migration003SQL string
 
+//go:embed migrations/004_nullable_git_root.sql
+var migration004SQL string
+
 // DB wraps the SQLite database connection
 type DB struct {
 	conn *sql.DB
@@ -90,6 +93,12 @@ func (db *DB) runMigrations() error {
 	err = db.applyMigration("003", migration003SQL)
 	if err != nil {
 		return fmt.Errorf("failed to apply migration 003: %w", err)
+	}
+
+	// マイグレーション004を実行
+	err = db.applyMigration("004", migration004SQL)
+	if err != nil {
+		return fmt.Errorf("failed to apply migration 004: %w", err)
 	}
 
 	return nil

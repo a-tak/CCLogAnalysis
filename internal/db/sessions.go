@@ -453,3 +453,16 @@ func (db *DB) ListSessions(projectID *int64, limit, offset int) ([]*SessionRow, 
 
 	return sessions, nil
 }
+
+// CountSessions returns the number of sessions for a project
+func (db *DB) CountSessions(projectID int64) (int, error) {
+	query := `SELECT COUNT(*) FROM sessions WHERE project_id = ?`
+
+	var count int
+	err := db.conn.QueryRow(query, projectID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count sessions: %w", err)
+	}
+
+	return count, nil
+}

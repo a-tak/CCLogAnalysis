@@ -9,6 +9,11 @@ import (
 	"time"
 )
 
+// stringPtr はテスト用のヘルパー関数で、文字列のポインタを返す
+func stringPtr(s string) *string {
+	return &s
+}
+
 func TestListGroupsHandler(t *testing.T) {
 	t.Run("グループ一覧を取得できる", func(t *testing.T) {
 		mockService := &MockSessionService{
@@ -16,14 +21,14 @@ func TestListGroupsHandler(t *testing.T) {
 				{
 					ID:        1,
 					Name:      "test-repo",
-					GitRoot:   "/path/to/test-repo.git",
+					GitRoot:   stringPtr("/path/to/test-repo.git"),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				},
 				{
 					ID:        2,
 					Name:      "another-repo",
-					GitRoot:   "/path/to/another-repo.git",
+					GitRoot:   stringPtr("/path/to/another-repo.git"),
 					CreatedAt: time.Now(),
 					UpdatedAt: time.Now(),
 				},
@@ -86,7 +91,7 @@ func TestGetGroupHandler(t *testing.T) {
 			ProjectGroupDetail: &ProjectGroupDetailResponse{
 				ID:        1,
 				Name:      "test-repo",
-				GitRoot:   "/path/to/test-repo.git",
+				GitRoot:   stringPtr("/path/to/test-repo.git"),
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 				Projects: []ProjectResponse{
