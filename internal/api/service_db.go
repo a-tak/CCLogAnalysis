@@ -5,13 +5,16 @@ import (
 	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/logger"
 	"github.com/a-tak/ccloganalysis/internal/parser"
 )
 
 // DatabaseSessionService implements SessionService using SQLite database
 type DatabaseSessionService struct {
-	db     *db.DB
-	parser *parser.Parser
+	db        *db.DB
+	parser    *parser.Parser
+	syncError error
+	logger    *logger.Logger
 }
 
 // NewDatabaseSessionService creates a new DatabaseSessionService
@@ -20,6 +23,7 @@ func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessi
 	service := &DatabaseSessionService{
 		db:     database,
 		parser: p,
+		logger: logger.New(),
 	}
 
 	// 初回起動時に自動同期
@@ -40,6 +44,7 @@ func (s *DatabaseSessionService) autoSyncIfNeeded() {
 		result, err := db.SyncAll(s.db, s.parser)
 		if err != nil {
 			fmt.Printf("Warning: Auto-sync failed: %v\n", err)
+			s.syncError = err
 			return
 		}
 		fmt.Printf("Initial sync completed: %d projects, %d sessions synced\n",
@@ -82,7 +87,10 @@ func (s *DatabaseSessionService) ListSessions(projectName string) ([]SessionSumm
 	if projectName != "" {
 		project, err := s.db.GetProjectByName(projectName)
 		if err != nil {
-			// プロジェクトが存在しない場合は空のリストを返す
+			// プロジェクトが存在しない場合は警告を出力して空のリストを返す
+			s.logger.WarnWithContext("Project not found in database", map[string]interface{}{
+				"project": projectName,
+			})
 			return []SessionSummary{}, nil
 		}
 		projectID = &project.ID
@@ -234,6 +242,7 @@ func (s *DatabaseSessionService) Analyze(projectNames []string) (*AnalyzeRespons
 			projectResult, projectErr := db.SyncProject(s.db, s.parser, projectName)
 			if projectErr != nil {
 				result.ErrorCount++
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", projectName, projectErr))
 				continue
 			}
 			result.ProjectsProcessed += projectResult.ProjectsProcessed
@@ -241,6 +250,7 @@ func (s *DatabaseSessionService) Analyze(projectNames []string) (*AnalyzeRespons
 			result.SessionsSynced += projectResult.SessionsSynced
 			result.SessionsSkipped += projectResult.SessionsSkipped
 			result.ErrorCount += projectResult.ErrorCount
+			result.Errors = append(result.Errors, projectResult.Errors...)
 		}
 	}
 

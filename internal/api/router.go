@@ -14,12 +14,22 @@ import (
 
 // Handler holds the dependencies for HTTP handlers
 type Handler struct {
-	service SessionService
+	service   SessionService
+	dbService *DatabaseSessionService
 }
 
 // NewHandler creates a new Handler with the given service
 func NewHandler(service SessionService) *Handler {
-	return &Handler{service: service}
+	// DatabaseSessionService の場合は dbService にも設定
+	var dbService *DatabaseSessionService
+	if dbs, ok := service.(*DatabaseSessionService); ok {
+		dbService = dbs
+	}
+
+	return &Handler{
+		service:   service,
+		dbService: dbService,
+	}
 }
 
 // spaHandler serves static files and falls back to index.html for SPA routing
@@ -109,6 +119,11 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions", h.listSessionsHandler)
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)
+
+	// Debug endpoint (only available when using DatabaseSessionService)
+	if h.dbService != nil {
+		mux.HandleFunc("GET /api/debug/status", DebugStatusHandler(h.dbService))
+	}
 
 	// Static files for React frontend
 	spaHandler, err := newSPAHandler(static.Files)

@@ -1,11 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/logger"
 	"github.com/a-tak/ccloganalysis/internal/parser"
 )
 
@@ -287,6 +290,43 @@ func TestDatabaseSessionService_ListSessions(t *testing.T) {
 
 		if len(sessions) != 0 {
 			t.Errorf("Expected 0 sessions, got %d", len(sessions))
+		}
+	})
+
+	t.Run("存在しないプロジェクト名で警告ログを出力する", func(t *testing.T) {
+		// ログバッファを作成
+		buf := &bytes.Buffer{}
+		log := logger.New()
+		log.SetOutput(buf)
+		log.SetLevel(logger.DEBUG)
+
+		// ロガーを設定したサービスを作成
+		service := &DatabaseSessionService{
+			db:     database,
+			parser: nil,
+			logger: log,
+		}
+
+		// 存在しないプロジェクトでListSessionsを呼び出す
+		sessions, err := service.ListSessions("non-existent-project")
+		if err != nil {
+			t.Fatalf("ListSessions failed: %v", err)
+		}
+
+		if len(sessions) != 0 {
+			t.Errorf("Expected 0 sessions, got %d", len(sessions))
+		}
+
+		// ログ出力を確認
+		output := buf.String()
+		if !strings.Contains(output, "WARN") {
+			t.Error("Expected WARN level log")
+		}
+		if !strings.Contains(output, "Project not found in database") {
+			t.Error("Expected 'Project not found in database' message")
+		}
+		if !strings.Contains(output, "non-existent-project") {
+			t.Error("Expected project name in log message")
 		}
 	})
 
