@@ -168,8 +168,10 @@ else
   echo "$CHANGED_FRONTEND_FILES"
   echo ""
 
-  echo "🔧 ESLintチェック実行中..."
-  if cd web && npm run lint; then
+  echo "🔧 ESLintチェック実行中（変更ファイルのみ）..."
+  # 変更されたファイルのみをlint（webディレクトリからの相対パスに変換）
+  LINT_FILES=$(echo "$CHANGED_FRONTEND_FILES" | sed 's|^web/||')
+  if cd web && npx eslint $LINT_FILES; then
     cd ..
     echo "✅ ESLint: 問題なし"
   else
@@ -177,7 +179,7 @@ else
     echo "❌ ESLint: エラー検出"
     echo ""
     echo "推奨対処:"
-    echo "1. cd web && npm run lint でエラー確認"
+    echo "1. cd web && npx eslint で変更ファイルを確認"
     echo "2. エラーを修正"
     echo "3. 修正完了後、再度 /ready-for-pr を実行"
     exit 1
@@ -227,11 +229,16 @@ fi
 
 **実装形式**: code-simplifierエージェントを呼び出してコード簡素化提案を実行します。
 
+**重要**: bashコマンドで取得した `$CHANGED_FILES` の内容を、プロンプト内に**明示的に含めて**ください。エージェントが自分で`git status`を実行しないようにするためです。
+
 ```
 Task(
   subagent_type="code-simplifier:code-simplifier",
   description="コード簡素化提案",
-  prompt="mainブランチからの変更ファイルについて、コードの簡素化提案を行ってください。
+  prompt="以下のmainブランチからの変更ファイルについて、コードの簡素化提案を行ってください。
+
+## 変更ファイル（mainブランチからの全変更）
+<$CHANGED_FILES の内容をここに列挙>
 
 ## 重点観点
 - コードの明確化・一貫性・保守性の向上
