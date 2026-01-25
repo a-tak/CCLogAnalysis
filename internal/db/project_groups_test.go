@@ -4,12 +4,17 @@ import (
 	"testing"
 )
 
+// stringPtr はテスト用のヘルパー関数で、文字列のポインタを返す
+func stringPtr(s string) *string {
+	return &s
+}
+
 func TestCreateProjectGroup(t *testing.T) {
 	db, _ := setupTestDB(t)
 	defer db.Close()
 
 	t.Run("プロジェクトグループを作成できる", func(t *testing.T) {
-		groupID, err := db.CreateProjectGroup("my-repo", "/path/to/repo.git")
+		groupID, err := db.CreateProjectGroup("my-repo", stringPtr("/path/to/repo.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -27,22 +32,33 @@ func TestCreateProjectGroup(t *testing.T) {
 		if group.Name != "my-repo" {
 			t.Errorf("Expected name 'my-repo', got '%s'", group.Name)
 		}
-		if group.GitRoot != "/path/to/repo.git" {
-			t.Errorf("Expected git_root '/path/to/repo.git', got '%s'", group.GitRoot)
+		if group.GitRoot == nil || *group.GitRoot != "/path/to/repo.git" {
+			t.Errorf("Expected git_root '/path/to/repo.git', got '%v'", group.GitRoot)
 		}
 	})
 
-	t.Run("同じgit_rootで重複作成できない", func(t *testing.T) {
-		// 1つ目を作成
-		_, err := db.CreateProjectGroup("first-group", "/path/to/duplicate.git")
+	t.Run("git_rootがNULLのグループを作成できる", func(t *testing.T) {
+		// git_rootがNULLのグループを作成
+		groupID, err := db.CreateProjectGroup("no-git-group", nil)
 		if err != nil {
-			t.Fatalf("First CreateProjectGroup failed: %v", err)
+			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
 
-		// 2つ目を作成（git_rootが同じ）
-		_, err = db.CreateProjectGroup("second-group", "/path/to/duplicate.git")
-		if err == nil {
-			t.Error("Expected error for duplicate git_root, got nil")
+		if groupID == 0 {
+			t.Error("Expected non-zero group ID")
+		}
+
+		// 作成されたグループを取得して確認
+		group, err := db.GetProjectGroupByID(groupID)
+		if err != nil {
+			t.Fatalf("GetProjectGroupByID failed: %v", err)
+		}
+
+		if group.Name != "no-git-group" {
+			t.Errorf("Expected name 'no-git-group', got '%s'", group.Name)
+		}
+		if group.GitRoot != nil {
+			t.Errorf("Expected git_root to be nil, got '%v'", group.GitRoot)
 		}
 	})
 }
@@ -53,7 +69,7 @@ func TestGetProjectGroupByGitRoot(t *testing.T) {
 
 	t.Run("git_rootからグループを取得できる", func(t *testing.T) {
 		// グループを作成
-		_, err := db.CreateProjectGroup("test-group", "/path/to/test.git")
+		_, err := db.CreateProjectGroup("test-group", stringPtr("/path/to/test.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -83,11 +99,11 @@ func TestListProjectGroups(t *testing.T) {
 
 	t.Run("全グループを一覧取得できる", func(t *testing.T) {
 		// 複数のグループを作成
-		_, err := db.CreateProjectGroup("group-1", "/path/to/repo1.git")
+		_, err := db.CreateProjectGroup("group-1", stringPtr("/path/to/repo1.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
-		_, err = db.CreateProjectGroup("group-2", "/path/to/repo2.git")
+		_, err = db.CreateProjectGroup("group-2", stringPtr("/path/to/repo2.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -116,7 +132,7 @@ func TestAddProjectToGroup(t *testing.T) {
 		}
 
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("test-group", "/path/to/repo.git")
+		groupID, err := db.CreateProjectGroup("test-group", stringPtr("/path/to/repo.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -149,7 +165,7 @@ func TestAddProjectToGroup(t *testing.T) {
 		}
 
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("duplicate-group", "/path/to/dup.git")
+		groupID, err := db.CreateProjectGroup("duplicate-group", stringPtr("/path/to/dup.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -174,7 +190,7 @@ func TestGetGroupWithProjects(t *testing.T) {
 
 	t.Run("グループと配下のプロジェクトを取得できる", func(t *testing.T) {
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("my-group", "/path/to/repo.git")
+		groupID, err := db.CreateProjectGroup("my-group", stringPtr("/path/to/repo.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -220,7 +236,7 @@ func TestDeleteProjectGroup(t *testing.T) {
 
 	t.Run("グループを削除できる", func(t *testing.T) {
 		// グループを作成
-		groupID, err := db.CreateProjectGroup("delete-group", "/path/to/delete.git")
+		groupID, err := db.CreateProjectGroup("delete-group", stringPtr("/path/to/delete.git"))
 		if err != nil {
 			t.Fatalf("CreateProjectGroup failed: %v", err)
 		}
@@ -254,6 +270,192 @@ func TestDeleteProjectGroup(t *testing.T) {
 		}
 		if len(projects) != 0 {
 			t.Errorf("Expected 0 projects after group deletion, got %d", len(projects))
+		}
+	})
+}
+
+func TestGetStandaloneGroupsInWorktreeGroups(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("git_root=NULL かつ ワークツリーグループのメンバー → IDが返る", func(t *testing.T) {
+		// Setup:
+		// 1. ワークツリーグループ作成
+		worktreeGroupID, err := db.CreateProjectGroup("voxment", stringPtr("/path/to/voxment"))
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// 2. スタンドアロングループ作成（削除済みワークツリー想定）
+		standaloneGroupID, err := db.CreateProjectGroup("voxment-worktrees-deleted", nil)
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// 3. プロジェクト作成
+		projectID, err := db.CreateProject("deleted-worktree-project", "/path/to/deleted")
+		if err != nil {
+			t.Fatalf("CreateProject failed: %v", err)
+		}
+
+		// 4. プロジェクトを両グループに追加
+		err = db.AddProjectToGroup(projectID, worktreeGroupID)
+		if err != nil {
+			t.Fatalf("AddProjectToGroup (worktree) failed: %v", err)
+		}
+		err = db.AddProjectToGroup(projectID, standaloneGroupID)
+		if err != nil {
+			t.Fatalf("AddProjectToGroup (standalone) failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsInWorktreeGroups()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsInWorktreeGroups failed: %v", err)
+		}
+		if len(hiddenIDs) != 1 {
+			t.Errorf("Expected 1 hidden group, got %d", len(hiddenIDs))
+		}
+		if len(hiddenIDs) > 0 && hiddenIDs[0] != standaloneGroupID {
+			t.Errorf("Expected standalone group ID %d, got %d", standaloneGroupID, hiddenIDs[0])
+		}
+	})
+
+	t.Run("git_root=NULL かつ 独立プロジェクト → IDが返らない", func(t *testing.T) {
+		// Setup: スタンドアロングループ（ワークツリーグループのメンバーではない）
+		standaloneGroupID, err := db.CreateProjectGroup("independent-project", nil)
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+		projectID, err := db.CreateProject("independent", "/path/to/independent")
+		if err != nil {
+			t.Fatalf("CreateProject failed: %v", err)
+		}
+		err = db.AddProjectToGroup(projectID, standaloneGroupID)
+		if err != nil {
+			t.Fatalf("AddProjectToGroup failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsInWorktreeGroups()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsInWorktreeGroups failed: %v", err)
+		}
+		// standaloneGroupIDは含まれないはず
+		for _, id := range hiddenIDs {
+			if id == standaloneGroupID {
+				t.Error("Independent project group should not be hidden")
+			}
+		}
+	})
+
+	t.Run("git_root!=NULL のグループ → IDが返らない", func(t *testing.T) {
+		// Setup: ワークツリーグループ
+		worktreeGroupID, err := db.CreateProjectGroup("worktree-group", stringPtr("/path/to/repo"))
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+		projectID, err := db.CreateProject("project", "/path/to/project")
+		if err != nil {
+			t.Fatalf("CreateProject failed: %v", err)
+		}
+		err = db.AddProjectToGroup(projectID, worktreeGroupID)
+		if err != nil {
+			t.Fatalf("AddProjectToGroup failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsInWorktreeGroups()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsInWorktreeGroups failed: %v", err)
+		}
+		// worktreeGroupIDは含まれないはず
+		for _, id := range hiddenIDs {
+			if id == worktreeGroupID {
+				t.Error("Worktree group should not be hidden")
+			}
+		}
+	})
+}
+
+func TestGetStandaloneGroupsWithWorktreeName(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("git_root=NULL かつ 名前にworktreeを含む → IDが返る", func(t *testing.T) {
+		// Setup: worktreeを含むスタンドアロングループ
+		groupID, err := db.CreateProjectGroup("my-repo-worktrees-feature-123", nil)
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsWithWorktreeName()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsWithWorktreeName failed: %v", err)
+		}
+
+		found := false
+		for _, id := range hiddenIDs {
+			if id == groupID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Error("Expected worktree group to be in hidden list")
+		}
+	})
+
+	t.Run("git_root=NULL だが 名前にworktreeを含まない → IDが返らない", func(t *testing.T) {
+		// Setup: worktreeを含まないスタンドアロングループ
+		groupID, err := db.CreateProjectGroup("independent-project", nil)
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsWithWorktreeName()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsWithWorktreeName failed: %v", err)
+		}
+
+		for _, id := range hiddenIDs {
+			if id == groupID {
+				t.Error("Independent project should not be in hidden list")
+			}
+		}
+	})
+
+	t.Run("git_root!=NULL かつ 名前にworktreeを含む → IDが返らない", func(t *testing.T) {
+		// Setup: ワークツリーグループ（名前にworktreeを含むが、git_rootがある）
+		groupID, err := db.CreateProjectGroup("my-worktrees-repo", stringPtr("/path/to/repo"))
+		if err != nil {
+			t.Fatalf("CreateProjectGroup failed: %v", err)
+		}
+
+		// Execute
+		hiddenIDs, err := db.GetStandaloneGroupsWithWorktreeName()
+
+		// Assert
+		if err != nil {
+			t.Fatalf("GetStandaloneGroupsWithWorktreeName failed: %v", err)
+		}
+
+		for _, id := range hiddenIDs {
+			if id == groupID {
+				t.Error("Worktree group with git_root should not be in hidden list")
+			}
 		}
 	})
 }

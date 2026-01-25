@@ -10,18 +10,15 @@ import (
 type ProjectGroupRow struct {
 	ID        int64
 	Name      string
-	GitRoot   string
+	GitRoot   *string // NULL可能
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
 // CreateProjectGroup creates a new project group
-func (db *DB) CreateProjectGroup(name, gitRoot string) (int64, error) {
+func (db *DB) CreateProjectGroup(name string, gitRoot *string) (int64, error) {
 	if name == "" {
 		return 0, fmt.Errorf("group name cannot be empty")
-	}
-	if gitRoot == "" {
-		return 0, fmt.Errorf("git root cannot be empty")
 	}
 
 	query := `
@@ -41,6 +38,36 @@ func (db *DB) CreateProjectGroup(name, gitRoot string) (int64, error) {
 	return id, nil
 }
 
+// GetProjectGroupByName retrieves a project group by name
+func (db *DB) GetProjectGroupByName(name string) (*ProjectGroupRow, error) {
+	query := `
+		SELECT id, name, git_root, created_at, updated_at
+		FROM project_groups
+		WHERE name = ?
+	`
+	var group ProjectGroupRow
+	var gitRootNull sql.NullString
+	err := db.conn.QueryRow(query, name).Scan(
+		&group.ID,
+		&group.Name,
+		&gitRootNull,
+		&group.CreatedAt,
+		&group.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project group not found for name: %s", name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query project group: %w", err)
+	}
+
+	if gitRootNull.Valid {
+		group.GitRoot = &gitRootNull.String
+	}
+
+	return &group, nil
+}
+
 // GetProjectGroupByGitRoot retrieves a project group by git root
 func (db *DB) GetProjectGroupByGitRoot(gitRoot string) (*ProjectGroupRow, error) {
 	query := `
@@ -49,10 +76,11 @@ func (db *DB) GetProjectGroupByGitRoot(gitRoot string) (*ProjectGroupRow, error)
 		WHERE git_root = ?
 	`
 	var group ProjectGroupRow
+	var gitRootNull sql.NullString
 	err := db.conn.QueryRow(query, gitRoot).Scan(
 		&group.ID,
 		&group.Name,
-		&group.GitRoot,
+		&gitRootNull,
 		&group.CreatedAt,
 		&group.UpdatedAt,
 	)
@@ -61,6 +89,10 @@ func (db *DB) GetProjectGroupByGitRoot(gitRoot string) (*ProjectGroupRow, error)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query project group: %w", err)
+	}
+
+	if gitRootNull.Valid {
+		group.GitRoot = &gitRootNull.String
 	}
 
 	return &group, nil
@@ -74,10 +106,11 @@ func (db *DB) GetProjectGroupByID(id int64) (*ProjectGroupRow, error) {
 		WHERE id = ?
 	`
 	var group ProjectGroupRow
+	var gitRootNull sql.NullString
 	err := db.conn.QueryRow(query, id).Scan(
 		&group.ID,
 		&group.Name,
-		&group.GitRoot,
+		&gitRootNull,
 		&group.CreatedAt,
 		&group.UpdatedAt,
 	)
@@ -86,6 +119,10 @@ func (db *DB) GetProjectGroupByID(id int64) (*ProjectGroupRow, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to query project group: %w", err)
+	}
+
+	if gitRootNull.Valid {
+		group.GitRoot = &gitRootNull.String
 	}
 
 	return &group, nil
@@ -107,15 +144,19 @@ func (db *DB) ListProjectGroups() ([]*ProjectGroupRow, error) {
 	var groups []*ProjectGroupRow
 	for rows.Next() {
 		var group ProjectGroupRow
+		var gitRootNull sql.NullString
 		err := rows.Scan(
 			&group.ID,
 			&group.Name,
-			&group.GitRoot,
+			&gitRootNull,
 			&group.CreatedAt,
 			&group.UpdatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan project group row: %w", err)
+		}
+		if gitRootNull.Valid {
+			group.GitRoot = &gitRootNull.String
 		}
 		groups = append(groups, &group)
 	}
@@ -206,4 +247,72 @@ func (db *DB) DeleteProjectGroup(id int64) error {
 	}
 
 	return nil
+}
+
+// GetStandaloneGroupsInWorktreeGroups returns IDs of standalone groups
+// that are members of worktree groups (should be hidden in group list)
+func (db *DB) GetStandaloneGroupsInWorktreeGroups() ([]int64, error) {
+	query := `
+		SELECT DISTINCT pg.id
+		FROM project_groups pg
+		INNER JOIN project_group_mappings pgm ON pg.id = pgm.group_id
+		INNER JOIN projects p ON pgm.project_id = p.id
+		INNER JOIN project_group_mappings pgm2 ON p.id = pgm2.project_id
+		INNER JOIN project_groups pg2 ON pgm2.group_id = pg2.id
+		WHERE pg.git_root IS NULL
+		  AND pg2.git_root IS NOT NULL
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query standalone groups in worktree groups: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan group id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating group id rows: %w", err)
+	}
+
+	return ids, nil
+}
+
+// GetStandaloneGroupsWithWorktreeName returns IDs of standalone groups
+// whose name contains "worktree" (fallback filter for deleted worktrees)
+func (db *DB) GetStandaloneGroupsWithWorktreeName() ([]int64, error) {
+	query := `
+		SELECT id
+		FROM project_groups
+		WHERE git_root IS NULL
+		  AND name LIKE '%worktree%'
+	`
+
+	rows, err := db.conn.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query standalone groups with worktree name: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan group id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating group id rows: %w", err)
+	}
+
+	return ids, nil
 }

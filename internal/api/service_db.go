@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
@@ -335,21 +336,62 @@ func (s *DatabaseSessionService) GetProjectTimeline(projectName, period string, 
 
 // ListProjectGroups returns all project groups
 func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, error) {
+	// 1. 全グループを取得
 	groupRows, err := s.db.ListProjectGroups()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list project groups: %w", err)
 	}
 
+	// 2. 除外対象のグループIDを取得（ワークツリーグループのメンバー）
+	hiddenGroupIDs, err := s.db.GetStandaloneGroupsInWorktreeGroups()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hidden group ids: %w", err)
+	}
+
+	// 3. 除外対象のグループIDを取得（名前にworktreeを含む）
+	worktreeNameGroupIDs, err := s.db.GetStandaloneGroupsWithWorktreeName()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get worktree name group ids: %w", err)
+	}
+
+	// 4. 除外対象をmapに変換（O(1)検索用）
+	hiddenMap := make(map[int64]bool)
+	for _, id := range hiddenGroupIDs {
+		hiddenMap[id] = true
+	}
+	for _, id := range worktreeNameGroupIDs {
+		hiddenMap[id] = true
+	}
+
+	// 5. フィルタリング
 	groups := make([]ProjectGroupResponse, 0, len(groupRows))
 	for _, row := range groupRows {
-		groups = append(groups, ProjectGroupResponse{
-			ID:        row.ID,
-			Name:      row.Name,
-			GitRoot:   row.GitRoot,
-			CreatedAt: row.CreatedAt,
-			UpdatedAt: row.UpdatedAt,
-		})
+		// 除外対象でない場合のみ追加
+		if !hiddenMap[row.ID] {
+			groups = append(groups, ProjectGroupResponse{
+				ID:        row.ID,
+				Name:      row.Name,
+				GitRoot:   row.GitRoot,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			})
+		}
 	}
+
+	// 6. ソート: git_rootが設定されているグループを先頭に、その後は名前順
+	sort.Slice(groups, func(i, j int) bool {
+		// git_rootの有無で優先順位を決定
+		iHasGitRoot := groups[i].GitRoot != nil
+		jHasGitRoot := groups[j].GitRoot != nil
+
+		if iHasGitRoot != jHasGitRoot {
+			// git_rootがあるグループを先頭に
+			return iHasGitRoot
+		}
+
+		// git_rootの有無が同じ場合は、名前順でソート
+		return groups[i].Name < groups[j].Name
+	})
 
 	return groups, nil
 }
@@ -372,10 +414,10 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 	projects := make([]ProjectResponse, 0, len(projectRows))
 	for _, row := range projectRows {
 		// セッション数を取得
-		sessions, err := s.db.ListSessions(&row.ID, 1000, 0)
-		sessionCount := 0
-		if err == nil {
-			sessionCount = len(sessions)
+		sessionCount, err := s.db.CountSessions(row.ID)
+		if err != nil {
+			fmt.Printf("Warning: failed to count sessions for project %s: %v\n", row.Name, err)
+			sessionCount = 0
 		}
 
 		projects = append(projects, ProjectResponse{
