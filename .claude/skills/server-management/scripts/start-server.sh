@@ -1,82 +1,117 @@
 #!/bin/bash
+
 set -e
 
-PID_FILE=".claude/skills/server-management/.server.pid"
+# パラメータ解析
 MODE="${1:-dev}"
 
-# 1. 既存プロセスチェック
+# リポジトリルートを取得
+# スクリプト位置: investigate-session-pickup-issue/.claude/skills/server-management/scripts/
+# リポジトリルート: investigate-session-pickup-issue/
+# したがって: .. => server-management
+#             ../.. => skills
+#             ../../.. => .claude
+#             ../../../.. => investigate-session-pickup-issue
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+SKILL_DIR="$SCRIPT_DIR/.."
+PID_FILE="$SKILL_DIR/.server.pid"
+LOG_FILE="$SKILL_DIR/server.log"
+
+# 既存プロセスをチェック
 if [ -f "$PID_FILE" ]; then
-  read EXISTING_PID EXISTING_PORT < "$PID_FILE"
-  if kill -0 "$EXISTING_PID" 2>/dev/null; then
-    echo "❌ エラー: サーバーは既に起動中です（PID: $EXISTING_PID, ポート: $EXISTING_PORT）"
-    exit 1
-  else
-    echo "⚠️  警告: PIDファイルが残っていましたが、プロセスは終了しています"
-    rm "$PID_FILE"
-  fi
+    OLD_PID=$(cut -d: -f1 "$PID_FILE" 2>/dev/null || echo "")
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "❌ サーバーは既に起動しています (PID: $OLD_PID)"
+        exit 1
+    fi
 fi
 
-# 2. 空きポートを探す（8080から8089まで）
+# 空きポートを検索
 echo "🔍 空きポートを検索中..."
 PORT=""
-for port in {8080..8089}; do
-  if ! lsof -i :$port -t >/dev/null 2>&1; then
-    PORT=$port
-    echo "✅ ポート $PORT が利用可能です"
-    break
-  fi
+for p in {8080..8089}; do
+    if ! lsof -Pi :$p -sTCP:LISTEN -t >/dev/null 2>&1; then
+        PORT=$p
+        break
+    fi
 done
 
 if [ -z "$PORT" ]; then
-  echo "❌ エラー: ポート 8080-8089 はすべて使用中です"
-  exit 1
+    echo "❌ 空きポートが見つかりません（8080-8089を確認してください）"
+    exit 1
 fi
 
-# 3. モード別環境変数設定
-if [ "$MODE" = "dev" ]; then
-  echo "🔧 開発モードでサーバーを起動します..."
-  export PORT=$PORT
-  export ENABLE_CORS=true
-  export ENABLE_FILE_WATCH=true
-  export FILE_WATCH_INTERVAL=15
-  export FILE_WATCH_DEBOUNCE=5
-elif [ "$MODE" = "prod" ]; then
-  echo "🚀 本番モードでサーバーを起動します..."
-  export PORT=$PORT
-else
-  echo "❌ エラー: 不明なモード '$MODE'"
-  echo "使用法: $0 [dev|prod]"
-  exit 1
-fi
+echo "✅ ポート $PORT が利用可能です"
 
-# 4. ビルド & 起動
-make build
-nohup ./bin/ccloganalysis > .claude/skills/server-management/server.log 2>&1 &
-PID=$!
+# フロントエンドをビルド
+echo "🔧 フロントエンドをビルド中..."
+cd "$REPO_ROOT/web"
+npm run build > /dev/null 2>&1 || {
+    echo "❌ フロントエンドのビルドに失敗しました"
+    exit 2
+}
 
-# 5. PIDとポートを記録
-echo "$PID $PORT" > "$PID_FILE"
-echo "📝 PIDファイルに記録しました: PID=$PID, PORT=$PORT"
+# バックエンド用のビルトファイルをコピー
+mkdir -p "$REPO_ROOT/internal/static/dist"
+cp -r "$REPO_ROOT/web/dist"/* "$REPO_ROOT/internal/static/dist/" 2>/dev/null || true
 
-# 6. ヘルスチェック（最大30秒待機）
-echo "🔍 サーバーの起動を確認中..."
-HEALTH_URL="http://localhost:$PORT/api/health"
-RETRY_COUNT=0
-MAX_RETRIES=30
+# サーバーをビルド
+echo "🔧 サーバーをビルド中..."
+cd "$REPO_ROOT"
+go build -o ".server_bin" cmd/server/main.go > /dev/null 2>&1 || {
+    echo "❌ サーバーのビルドに失敗しました"
+    exit 2
+}
 
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-  if curl -s -f "$HEALTH_URL" > /dev/null 2>&1; then
-    echo "✅ サーバーが正常に起動しました"
-    echo "   URL: http://localhost:$PORT"
-    echo "   PID: $PID"
-    echo "   ログ: .claude/skills/server-management/server.log"
-    exit 0
-  fi
+# 環境変数を設定
+export PORT=$PORT
+case "$MODE" in
+    dev)
+        export LOG_LEVEL="DEBUG"
+        echo "🔧 開発モード(LOG_LEVEL=DEBUG)でサーバーを起動します..."
+        ;;
+    prod)
+        export LOG_LEVEL="INFO"
+        echo "🔧 本番モード(LOG_LEVEL=INFO)でサーバーを起動します..."
+        ;;
+    *)
+        echo "❌ 不正なモード: $MODE (dev または prod を指定してください)"
+        exit 1
+        ;;
+esac
 
-  sleep 1
-  RETRY_COUNT=$((RETRY_COUNT + 1))
+# サーバーをバックグラウンド起動
+"$REPO_ROOT/.server_bin" > "$LOG_FILE" 2>&1 &
+SERVER_PID=$!
+
+# PIDとポート番号を保存
+echo "$SERVER_PID:$PORT" > "$PID_FILE"
+
+# ヘルスチェック（最大30秒待機）
+echo "⏳ サーバーのヘルスチェック中..."
+HEALTH_CHECK_COUNT=0
+MAX_ATTEMPTS=30
+
+while [ $HEALTH_CHECK_COUNT -lt $MAX_ATTEMPTS ]; do
+    if curl -s "http://localhost:$PORT/api/health" > /dev/null 2>&1; then
+        echo "✅ サーバーが起動しました"
+        echo "📍 URL: http://localhost:$PORT"
+        echo "📝 ログファイル: $LOG_FILE"
+        exit 0
+    fi
+
+    # プロセスが生きているかチェック
+    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+        echo "❌ サーバープロセスが異常終了しました"
+        cat "$LOG_FILE" | tail -20
+        exit 1
+    fi
+
+    HEALTH_CHECK_COUNT=$((HEALTH_CHECK_COUNT + 1))
+    sleep 1
 done
 
-echo "❌ エラー: サーバーの起動に失敗しました"
-echo "   ログを確認してください: .claude/skills/server-management/server.log"
+echo "❌ ヘルスチェックがタイムアウトしました"
+kill "$SERVER_PID" 2>/dev/null || true
 exit 1

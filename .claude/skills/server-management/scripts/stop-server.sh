@@ -1,75 +1,68 @@
 #!/bin/bash
-set -e
 
-PID_FILE=".claude/skills/server-management/.server.pid"
-SIGTERM_TIMEOUT=10
+# リポジトリルートを取得
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+PID_FILE="$REPO_ROOT/.claude/skills/server-management/.server.pid"
 
-# 1. PIDファイルチェック
+# PIDファイルをチェック
 if [ ! -f "$PID_FILE" ]; then
-  echo "⚠️  警告: PIDファイルが見つかりません"
-  echo "   サーバーはスクリプト以外の方法で起動された可能性があります"
-  echo "   手動でプロセスを確認してください: ps aux | grep ccloganalysis"
-  exit 1
+    echo "❌ サーバーは起動していません（PIDファイルが見つかりません）"
+    exit 1
 fi
 
-# 2. PIDとポートを読み取り
-read PID PORT < "$PID_FILE"
-echo "📝 PIDファイルから読み取り: PID=$PID, PORT=$PORT"
+# PIDとポート番号を読み取り
+PID=$(cut -d: -f1 "$PID_FILE" 2>/dev/null || echo "")
+PORT=$(cut -d: -f2 "$PID_FILE" 2>/dev/null || echo "")
 
-# 3. プロセス存在確認
+if [ -z "$PID" ]; then
+    echo "❌ 無効なPIDファイルです"
+    rm -f "$PID_FILE"
+    exit 1
+fi
+
+echo "🛑 サーバーを停止しています (PID: $PID)..."
+
+# プロセスの確認
 if ! kill -0 "$PID" 2>/dev/null; then
-  echo "⚠️  警告: プロセス $PID は既に終了しています"
-  rm "$PID_FILE"
-  echo "✅ PIDファイルをクリーンアップしました"
-  exit 0
+    echo "⚠️  プロセスが既に終了しています"
+    rm -f "$PID_FILE"
+    exit 0
 fi
 
-# 4. Graceful Shutdown（SIGTERM）
-echo "🛑 サーバーを停止中... (PID: $PID, ポート: $PORT)"
-kill -TERM $PID 2>/dev/null || true
+# Graceful Shutdown（SIGTERM送信）
+kill -TERM "$PID" 2>/dev/null || true
 
-# 5. 最大10秒待機
+# 最大10秒待機
 WAIT_COUNT=0
-while [ $WAIT_COUNT -lt $SIGTERM_TIMEOUT ]; do
-  # プロセスとポートの両方をチェック
-  if ! kill -0 "$PID" 2>/dev/null && ! lsof -i :$PORT -t >/dev/null 2>&1; then
-    echo "✅ サーバーが正常に停止しました"
-    rm "$PID_FILE"
-    exit 0
-  fi
+MAX_WAIT=10
 
-  sleep 1
-  WAIT_COUNT=$((WAIT_COUNT + 1))
-  echo -n "."
+while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+    if ! kill -0 "$PID" 2>/dev/null; then
+        echo "✅ サーバーが正常に停止しました"
+        break
+    fi
+    WAIT_COUNT=$((WAIT_COUNT + 1))
+    sleep 1
 done
 
-echo ""
-echo "⚠️  警告: Graceful shutdownがタイムアウトしました"
-echo "   強制終了します..."
-
-# 6. 強制終了（SIGKILL）
-# プロセスを強制終了
-kill -KILL $PID 2>/dev/null || true
-
-# ポートを使用しているプロセスも確実に終了
-PORT_PIDS=$(lsof -i :$PORT -t 2>/dev/null || true)
-if [ -n "$PORT_PIDS" ]; then
-  echo "   ポート $PORT を使用している残存プロセスを終了します: $PORT_PIDS"
-  for PORT_PID in $PORT_PIDS; do
-    kill -KILL $PORT_PID 2>/dev/null || true
-  done
+# 仍然起動している場合は強制終了
+if kill -0 "$PID" 2>/dev/null; then
+    echo "⚠️  タイムアウト、サーバーを強制終了します..."
+    kill -KILL "$PID" 2>/dev/null || true
+    sleep 1
 fi
 
-sleep 1
-
-# ポートが解放されたか確認
-if ! lsof -i :$PORT -t >/dev/null 2>&1; then
-  echo "✅ サーバーを強制終了しました"
-  rm "$PID_FILE"
-  exit 0
-else
-  echo "❌ エラー: サーバーの停止に失敗しました"
-  echo "   残存プロセス:"
-  lsof -i :$PORT 2>/dev/null || true
-  exit 1
+# ポートを使用している残存プロセスも確実に終了
+if [ -n "$PORT" ]; then
+    REMAINING_PIDS=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null || echo "")
+    if [ -n "$REMAINING_PIDS" ]; then
+        echo "⚠️  ポート $PORT を使用しているプロセスを終了します..."
+        echo "$REMAINING_PIDS" | xargs kill -9 2>/dev/null || true
+    fi
 fi
+
+# PIDファイルを削除
+rm -f "$PID_FILE"
+
+echo "✅ サーバーの停止処理が完了しました"
+exit 0

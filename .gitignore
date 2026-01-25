@@ -54,3 +54,4 @@ firebase-debug.log
 
 # サーバー管理スクリプト
 .claude/skills/server-management/.server.pid
+.server_bin

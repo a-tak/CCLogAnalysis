@@ -177,7 +177,7 @@ export default function ProjectDetailPage() {
                   <CardTitle>トークン使用量推移</CardTitle>
                   <CardDescription>時系列でのトークン使用状況</CardDescription>
                 </div>
-                <Tabs value={period} onValueChange={(v) => setPeriod(v as 'day' | 'week' | 'month')}>
+                <Tabs value={period} onValueChange={(v: string) => setPeriod(v as 'day' | 'week' | 'month')}>
                   <TabsList>
                     <TabsTrigger value="day">日別</TabsTrigger>
                     <TabsTrigger value="week">週別</TabsTrigger>
