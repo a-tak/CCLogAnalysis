@@ -6,12 +6,39 @@ Claude Codeのログを解析して、トークン使用量やモデル別の使
 
 Claude Codeに対する各種調整（モデル選択、プロンプト設定など）の効果を、ログ解析を通じて定量的に評価・可視化します。
 
+## バイナリダウンロード
+
+最新リリースは [GitHub Releases](https://github.com/a-tak/CCLogAnalysis/releases) からダウンロードできます。
+
+### 対応プラットフォーム
+
+- **Windows**: amd64
+- **macOS**: Intel (amd64), Apple Silicon (arm64)
+
+### インストール
+
+1. 最新リリースから環境に合ったファイルをダウンロード
+2. アーカイブを解凍
+3. 実行ファイルをパスの通ったディレクトリに配置（オプション）
+
+### 実行
+
+```bash
+# macOS / Linux
+./ccloganalysis
+
+# Windows
+ccloganalysis.exe
+```
+
+ブラウザで http://localhost:8080 にアクセスすると、React UIが表示されます。
+
 ## 技術スタック
 
 ### バックエンド
 - **言語**: Go 1.21+
 - **HTTPサーバー**: Go標準ライブラリ
-- **データベース**: SQLite（go-sqlite3）
+- **データベース**: SQLite（modernc.org/sqlite - Pure Go、cgo不要）
 - **データモード**: SQLiteデータベース
 
 ### フロントエンド

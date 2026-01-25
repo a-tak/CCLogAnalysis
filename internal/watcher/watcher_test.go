@@ -8,6 +8,7 @@ import (
 
 	"github.com/a-tak/ccloganalysis/internal/db"
 	"github.com/a-tak/ccloganalysis/internal/parser"
+	_ "modernc.org/sqlite"
 )
 
 func TestNewFileWatcher(t *testing.T) {

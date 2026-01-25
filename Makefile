@@ -1,4 +1,4 @@
-.PHONY: build build-frontend build-backend test clean dev run help
+.PHONY: build build-frontend build-backend test clean dev run help release-dry-run release-snapshot
 
 # Default target
 all: build
@@ -41,14 +41,26 @@ run: build
 	@echo "Running ccloganalysis..."
 	./bin/ccloganalysis
 
+# GoReleaser dry-run (test release locally without publishing)
+release-dry-run:
+	@echo "Running GoReleaser in dry-run mode..."
+	goreleaser release --snapshot --clean --skip=publish
+
+# Create snapshot build (local build without version tag)
+release-snapshot:
+	@echo "Creating snapshot build..."
+	goreleaser build --snapshot --clean
+
 # Show help
 help:
 	@echo "Available targets:"
-	@echo "  build            - Build both frontend and backend (default)"
-	@echo "  build-frontend   - Build React frontend only"
-	@echo "  build-backend    - Build Go backend only"
-	@echo "  test             - Run all tests"
-	@echo "  clean            - Remove build artifacts"
-	@echo "  dev              - Run development server with CORS"
-	@echo "  run              - Build and run the application"
-	@echo "  help             - Show this help message"
+	@echo "  build               - Build both frontend and backend (default)"
+	@echo "  build-frontend      - Build React frontend only"
+	@echo "  build-backend       - Build Go backend only"
+	@echo "  test                - Run all tests"
+	@echo "  clean               - Remove build artifacts"
+	@echo "  dev                 - Run development server with CORS"
+	@echo "  run                 - Build and run the application"
+	@echo "  release-dry-run     - Test GoReleaser locally (snapshot, no publish)"
+	@echo "  release-snapshot    - Create local snapshot build"
+	@echo "  help                - Show this help message"

@@ -1,0 +1,82 @@
+# GoReleaser configuration for CCLogAnalysis
+# Documentation: https://goreleaser.com
+
+project_name: ccloganalysis
+
+before:
+  hooks:
+    # Build React frontend before building Go backend
+    - cd web && npm ci && npm run build
+    - rm -rf internal/static/dist
+    - cp -r web/dist internal/static/
+
+builds:
+  - id: ccloganalysis
+    main: ./cmd/server
+    binary: ccloganalysis
+
+    # Disable CGO for pure Go build (modernc.org/sqlite)
+    env:
+      - CGO_ENABLED=0
+
+    # Build targets
+    goos:
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+    # ldflags for optimization and version information
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+
+archives:
+  - id: default
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+
+    # Archive naming: ccloganalysis_<version>_<os>_<arch>
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+
+    # Include README and LICENSE
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - '^chore:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: a-tak
+    name: CCLogAnalysis
+
+  # Release notes template
+  name_template: "{{.ProjectName}} v{{.Version}}"
+
+  # Draft release for manual review before publishing
+  draft: false
+
+  # Prerelease detection
+  prerelease: auto

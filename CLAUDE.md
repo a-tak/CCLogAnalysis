@@ -76,6 +76,14 @@ cd C:\Users\{username}\.claude\projects\{project-name}
 - 実際の調査データを使用する場合は、公開前に必ずレビューする
 - ドキュメントは常に最新状態を維持
 
+### サーバー起動・停止
+
+- **必須**: サーバーの起動・停止は `/server-management` スキルを使用する
+- コマンドラインで直接起動・停止しない（PID管理やポート競合を避けるため）
+- 起動: `/server-management start dev` または `/server-management start prod`
+- 停止: `/server-management stop`
+- 詳細は `README.md` の「実行」セクションを参照
+
 ### コミット前チェックリスト
 
 - [ ] ユーザー名が含まれていないか
