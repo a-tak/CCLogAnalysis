@@ -182,3 +182,37 @@ func (db *DB) DeleteProject(id int64) error {
 
 	return nil
 }
+
+// UpdateProjectLastScanTime updates the last scan time for a project
+func (db *DB) UpdateProjectLastScanTime(projectID int64, scanTime time.Time) error {
+	query := `UPDATE projects SET last_scan_time = ? WHERE id = ?`
+	_, err := db.conn.Exec(query, scanTime.Format(time.RFC3339), projectID)
+	if err != nil {
+		return fmt.Errorf("failed to update last scan time: %w", err)
+	}
+	return nil
+}
+
+// GetProjectLastScanTime returns the last scan time for a project
+func (db *DB) GetProjectLastScanTime(projectID int64) (*time.Time, error) {
+	var scanTimeStr sql.NullString
+	query := `SELECT last_scan_time FROM projects WHERE id = ?`
+	err := db.conn.QueryRow(query, projectID).Scan(&scanTimeStr)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("project not found: id=%d", projectID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last scan time: %w", err)
+	}
+
+	if !scanTimeStr.Valid {
+		return nil, nil
+	}
+
+	scanTime, err := time.Parse(time.RFC3339, scanTimeStr.String)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse last scan time: %w", err)
+	}
+
+	return &scanTime, nil
+}

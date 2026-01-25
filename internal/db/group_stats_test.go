@@ -62,7 +62,10 @@ func TestGetGroupStats(t *testing.T) {
 					total_cache_creation_tokens, total_cache_read_tokens,
 					error_count
 				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			`, s.id, s.projectID, "main", now, now.Add(time.Hour), 3600,
+			`, s.id, s.projectID, "main",
+				now.Format(time.RFC3339Nano),
+				now.Add(time.Hour).Format(time.RFC3339Nano),
+				3600,
 				s.inputTokens, s.outputTokens, 0, 0, s.errorCount)
 			if err != nil {
 				t.Fatalf("Failed to create session: %v", err)

@@ -10,6 +10,7 @@ import type {
   ProjectGroupListResponse,
   ProjectGroupDetail,
   ProjectGroupStats,
+  ScanStatus,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
@@ -132,6 +133,11 @@ export const api = {
   // Get project group statistics
   async getProjectGroupStats(groupId: number): Promise<ProjectGroupStats> {
     return fetchApi<ProjectGroupStats>(`/groups/${groupId}/stats`)
+  },
+
+  // Get scan status
+  async getScanStatus(): Promise<ScanStatus> {
+    return fetchApi<ScanStatus>('/scan/status')
   },
 }
 

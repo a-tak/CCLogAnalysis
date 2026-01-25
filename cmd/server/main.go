@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"github.com/a-tak/ccloganalysis/internal/api"
 	"github.com/a-tak/ccloganalysis/internal/db"
 	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 	"github.com/a-tak/ccloganalysis/internal/watcher"
 )
 
@@ -52,17 +54,24 @@ func main() {
 	p := parser.NewParser(claudeDir)
 	service := api.NewDatabaseSessionService(database, p)
 
-	// Perform initial sync on startup (unless SKIP_INITIAL_SYNC is set)
+	// Create scan manager
+	scanManager := scanner.NewScanManager(database, p)
+
+	// Sync project groups from existing data before starting scan
+	// This allows groups to be displayed immediately on server startup
+	if err := database.SyncProjectGroups(); err != nil {
+		log.Printf("Warning: Failed to sync project groups: %v", err)
+	} else {
+		fmt.Println("Project groups synchronized from existing data")
+	}
+
+	// Start initial sync asynchronously (unless SKIP_INITIAL_SYNC is set)
 	skipInitialSync := os.Getenv("SKIP_INITIAL_SYNC") != ""
 	if !skipInitialSync {
-		fmt.Println("Performing initial sync...")
-		result, err := db.SyncAll(database, p)
-		if err != nil {
-			log.Printf("Warning: Initial sync failed: %v", err)
-		} else {
-			fmt.Printf("Initial sync completed: %d projects, %d sessions synced\n",
-				result.ProjectsProcessed, result.SessionsSynced)
+		if err := scanManager.StartInitialScan(context.Background()); err != nil {
+			log.Printf("Warning: Failed to start initial scan: %v", err)
 		}
+		fmt.Println("Initial sync started in background...")
 	} else {
 		fmt.Println("Skipping initial sync (SKIP_INITIAL_SYNC is set)")
 	}
@@ -87,7 +96,7 @@ func main() {
 	fmt.Printf("Server starting on http://localhost:%s\n", port)
 
 	// Create handler and routes
-	handler := api.NewHandler(service)
+	handler := api.NewHandler(service, scanManager)
 	router := handler.Routes()
 
 	// Setup graceful shutdown
@@ -108,6 +117,11 @@ func main() {
 		log.Fatalf("Server error: %v", err)
 	case <-sigCh:
 		fmt.Println("\nShutting down gracefully...")
+
+		// Stop scan manager
+		if scanManager != nil {
+			scanManager.Stop()
+		}
 
 		// Stop file watcher
 		if fileWatcher != nil {

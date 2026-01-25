@@ -64,7 +64,10 @@ func TestGetProjectStats(t *testing.T) {
 				total_cache_creation_tokens, total_cache_read_tokens,
 				error_count
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, s.id, projectID, s.branch, s.startTime, s.endTime, duration,
+		`, s.id, projectID, s.branch,
+			s.startTime.Format(time.RFC3339Nano),
+			s.endTime.Format(time.RFC3339Nano),
+			duration,
 			s.inputTokens, s.outputTokens, 0, 0, s.errorCount)
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
@@ -174,7 +177,10 @@ func TestGetBranchStats(t *testing.T) {
 				total_cache_creation_tokens, total_cache_read_tokens,
 				error_count
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, s.id, projectID, s.branch, now, now.Add(time.Hour), 3600,
+		`, s.id, projectID, s.branch,
+			now.Format(time.RFC3339Nano),
+			now.Add(time.Hour).Format(time.RFC3339Nano),
+			3600,
 			s.inputTokens, s.outputTokens, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
@@ -249,7 +255,10 @@ func TestGetTimeSeriesStats(t *testing.T) {
 				total_cache_creation_tokens, total_cache_read_tokens,
 				error_count
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, s.id, projectID, "main", s.startTime, endTime, 3600,
+		`, s.id, projectID, "main",
+			s.startTime.Format(time.RFC3339Nano),
+			endTime.Format(time.RFC3339Nano),
+			3600,
 			s.tokens, 0, 0, 0, 0)
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)

@@ -230,8 +230,8 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 	var timeSeriesStats []TimeSeriesStats
 	for rows.Next() {
 		var stats TimeSeriesStats
-		var periodGroup string
-		var periodStartStr, periodEndStr string
+		var periodGroup sql.NullString
+		var periodStartStr, periodEndStr sql.NullString
 
 		err := rows.Scan(
 			&periodGroup,
@@ -247,12 +247,17 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 			return nil, fmt.Errorf("failed to scan time series stats: %w", err)
 		}
 
+		// NULL値をスキップ
+		if !periodStartStr.Valid || !periodEndStr.Valid {
+			continue
+		}
+
 		// 日付文字列をtime.Timeに変換
-		stats.PeriodStart, err = parseDateTime(periodStartStr)
+		stats.PeriodStart, err = parseDateTime(periodStartStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse period start: %w", err)
 		}
-		stats.PeriodEnd, err = parseDateTime(periodEndStr)
+		stats.PeriodEnd, err = parseDateTime(periodEndStr.String)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse period end: %w", err)
 		}

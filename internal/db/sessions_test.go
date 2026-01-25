@@ -140,7 +140,7 @@ func TestCreateSession(t *testing.T) {
 		session := createTestSession("1")
 
 		// セッション保存
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -166,7 +166,7 @@ func TestCreateSession(t *testing.T) {
 
 		session := createTestSession("token")
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -209,7 +209,7 @@ func TestCreateSession(t *testing.T) {
 
 		session := createTestSession("model")
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -255,7 +255,7 @@ func TestCreateSession(t *testing.T) {
 
 		session := createTestSession("entry")
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -283,7 +283,7 @@ func TestCreateSession(t *testing.T) {
 
 		session := createTestSession("message")
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -312,7 +312,7 @@ func TestCreateSession(t *testing.T) {
 
 		session := createTestSession("tool")
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -345,7 +345,7 @@ func TestCreateSession(t *testing.T) {
 	t.Run("存在しないプロジェクト名でエラーを返す", func(t *testing.T) {
 		session := createTestSession("invalid")
 
-		err := db.CreateSession(session, "non-existent-project")
+		err := db.CreateSession(session, "non-existent-project", time.Now())
 		if err == nil {
 			t.Error("Expected error for non-existent project, got nil")
 		}
@@ -362,13 +362,13 @@ func TestCreateSession(t *testing.T) {
 		session := createTestSession("rollback")
 
 		// 1回目の保存（成功するはず）
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
 
 		// 2回目の保存（同じIDで失敗するはず）
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err == nil {
 			t.Error("Expected error for duplicate session ID, got nil")
 		}
@@ -400,7 +400,7 @@ func TestGetSession(t *testing.T) {
 
 		originalSession := createTestSession("get")
 
-		err = db.CreateSession(originalSession, projectName)
+		err = db.CreateSession(originalSession, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -494,7 +494,7 @@ func TestListSessions(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			session := createTestSession("list-" + string(rune('1'+i)))
 
-			err = db.CreateSession(session, projectName)
+			err = db.CreateSession(session, projectName, time.Now())
 			if err != nil {
 				t.Fatalf("Failed to create session %d: %v", i, err)
 			}
@@ -536,7 +536,7 @@ func TestListSessions(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			session := createTestSession("pagination-" + string(rune('1'+i)))
 
-			err = db.CreateSession(session, projectName)
+			err = db.CreateSession(session, projectName, time.Now())
 			if err != nil {
 				t.Fatalf("Failed to create session %d: %v", i, err)
 			}
@@ -576,7 +576,7 @@ func TestListSessions(t *testing.T) {
 
 		// セッション作成
 		session := createTestSession("first-msg")
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -619,7 +619,7 @@ func TestListSessions(t *testing.T) {
 		}
 		session.Entries[0].Message.Content[0].Text = longMessage
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -656,7 +656,7 @@ func TestListSessions(t *testing.T) {
 		session := createTestSession("no-msg")
 		session.Entries = []parser.LogEntry{} // メッセージを削除
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -696,7 +696,7 @@ func TestListSessions(t *testing.T) {
 		session.Entries[0].Timestamp = session.StartTime
 		session.Entries[1].Timestamp = session.StartTime.Add(5 * time.Second)
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -764,7 +764,7 @@ func TestListSessions(t *testing.T) {
 			},
 		}
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}
@@ -832,7 +832,7 @@ func TestListSessions(t *testing.T) {
 			},
 		}
 
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, time.Now())
 		if err != nil {
 			t.Fatalf("Failed to create session: %v", err)
 		}

@@ -190,12 +190,13 @@ func TestSchemaIntegrity(t *testing.T) {
 
 	t.Run("projectsテーブルのカラム確認", func(t *testing.T) {
 		expectedColumns := map[string]bool{
-			"id":           true,
-			"name":         true,
-			"decoded_path": true,
-			"git_root":     true,
-			"created_at":   true,
-			"updated_at":   true,
+			"id":             true,
+			"name":           true,
+			"decoded_path":   true,
+			"git_root":       true,
+			"created_at":     true,
+			"updated_at":     true,
+			"last_scan_time": true, // マイグレーション005で追加
 		}
 
 		rows, err := db.conn.Query("PRAGMA table_info(projects)")
@@ -220,6 +221,51 @@ func TestSchemaIntegrity(t *testing.T) {
 		for col := range expectedColumns {
 			if !foundColumns[col] {
 				t.Errorf("Expected column %s not found in projects table", col)
+			}
+		}
+	})
+
+	t.Run("sessionsテーブルのカラム確認", func(t *testing.T) {
+		expectedColumns := map[string]bool{
+			"id":                         true,
+			"project_id":                 true,
+			"git_branch":                 true,
+			"start_time":                 true,
+			"end_time":                   true,
+			"duration_seconds":           true,
+			"total_input_tokens":         true,
+			"total_output_tokens":        true,
+			"total_cache_creation_tokens": true,
+			"total_cache_read_tokens":    true,
+			"error_count":                true,
+			"first_user_message":         true,
+			"created_at":                 true,
+			"updated_at":                 true,
+			"file_mod_time":              true, // マイグレーション005で追加
+		}
+
+		rows, err := db.conn.Query("PRAGMA table_info(sessions)")
+		if err != nil {
+			t.Fatalf("Failed to get table info: %v", err)
+		}
+		defer rows.Close()
+
+		foundColumns := make(map[string]bool)
+		for rows.Next() {
+			var cid int
+			var name, dataType string
+			var notNull, pk int
+			var dfltValue interface{}
+			err := rows.Scan(&cid, &name, &dataType, &notNull, &dfltValue, &pk)
+			if err != nil {
+				t.Errorf("Failed to scan column info: %v", err)
+			}
+			foundColumns[name] = true
+		}
+
+		for col := range expectedColumns {
+			if !foundColumns[col] {
+				t.Errorf("Expected column %s not found in sessions table", col)
 			}
 		}
 	})

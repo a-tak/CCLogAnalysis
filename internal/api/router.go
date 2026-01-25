@@ -9,17 +9,19 @@ import (
 	"os"
 	"strings"
 
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 	"github.com/a-tak/ccloganalysis/internal/static"
 )
 
 // Handler holds the dependencies for HTTP handlers
 type Handler struct {
-	service   SessionService
-	dbService *DatabaseSessionService
+	service     SessionService
+	dbService   *DatabaseSessionService
+	scanManager *scanner.ScanManager
 }
 
-// NewHandler creates a new Handler with the given service
-func NewHandler(service SessionService) *Handler {
+// NewHandler creates a new Handler with the given service and scan manager
+func NewHandler(service SessionService, scanManager *scanner.ScanManager) *Handler {
 	// DatabaseSessionService の場合は dbService にも設定
 	var dbService *DatabaseSessionService
 	if dbs, ok := service.(*DatabaseSessionService); ok {
@@ -27,8 +29,9 @@ func NewHandler(service SessionService) *Handler {
 	}
 
 	return &Handler{
-		service:   service,
-		dbService: dbService,
+		service:     service,
+		dbService:   dbService,
+		scanManager: scanManager,
 	}
 }
 
@@ -124,6 +127,9 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/groups", h.listGroupsHandler)
 	mux.HandleFunc("GET /api/groups/{id}", h.getGroupHandler)
 	mux.HandleFunc("GET /api/groups/{id}/stats", h.getGroupStatsHandler)
+
+	// Scan status endpoint
+	mux.HandleFunc("GET /api/scan/status", h.getScanStatusHandler)
 
 	// Debug endpoint (only available when using DatabaseSessionService)
 	if h.dbService != nil {

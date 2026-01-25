@@ -445,3 +445,147 @@ func TestGetProjectWorkingDirectory_AllSessionsNoCwd(t *testing.T) {
 		t.Errorf("Expected error 'working directory not found in any session', got '%v'", err)
 	}
 }
+
+func TestListSessionsWithModTime_Success(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "test-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	// テストファイルを作成
+	session1Path := filepath.Join(projectDir, "session-1.jsonl")
+	session2Path := filepath.Join(projectDir, "session-2.jsonl")
+	testContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1"}`
+
+	// session-1を作成
+	err = os.WriteFile(session1Path, []byte(testContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write session-1: %v", err)
+	}
+
+	// 少し待ってからsession-2を作成（modTimeを確実に異なるものにする）
+	time.Sleep(10 * time.Millisecond)
+	err = os.WriteFile(session2Path, []byte(testContent), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write session-2: %v", err)
+	}
+
+	// ファイルのmodTimeを取得
+	info1, _ := os.Stat(session1Path)
+	info2, _ := os.Stat(session2Path)
+	expectedModTime1 := info1.ModTime()
+	expectedModTime2 := info2.ModTime()
+
+	// パーサー作成
+	parser := NewParser(claudeDir)
+
+	// ListSessionsWithModTimeを実行
+	sessionInfos, err := parser.ListSessionsWithModTime("test-project")
+	if err != nil {
+		t.Fatalf("ListSessionsWithModTime failed: %v", err)
+	}
+
+	// 2つのセッションが返されることを確認
+	if len(sessionInfos) != 2 {
+		t.Errorf("Expected 2 sessions, got %d", len(sessionInfos))
+	}
+
+	// セッションIDとmodTimeを確認
+	foundSession1 := false
+	foundSession2 := false
+
+	for _, info := range sessionInfos {
+		if info.SessionID == "session-1" {
+			foundSession1 = true
+			// modTimeは秒単位で比較（ファイルシステムによって精度が異なる場合があるため）
+			if info.ModTime.Unix() != expectedModTime1.Unix() {
+				t.Errorf("Session-1 modTime mismatch: expected %v, got %v", expectedModTime1, info.ModTime)
+			}
+		} else if info.SessionID == "session-2" {
+			foundSession2 = true
+			if info.ModTime.Unix() != expectedModTime2.Unix() {
+				t.Errorf("Session-2 modTime mismatch: expected %v, got %v", expectedModTime2, info.ModTime)
+			}
+		}
+	}
+
+	if !foundSession1 {
+		t.Error("Session-1 not found in results")
+	}
+	if !foundSession2 {
+		t.Error("Session-2 not found in results")
+	}
+}
+
+func TestListSessionsWithModTime_NonJsonlFilesIgnored(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "test-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	// .jsonlファイルと非.jsonlファイルを作成
+	err = os.WriteFile(filepath.Join(projectDir, "session-1.jsonl"), []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write session-1.jsonl: %v", err)
+	}
+	err = os.WriteFile(filepath.Join(projectDir, "not-a-session.txt"), []byte("test"), 0644)
+	if err != nil {
+		t.Fatalf("Failed to write not-a-session.txt: %v", err)
+	}
+
+	parser := NewParser(claudeDir)
+
+	sessionInfos, err := parser.ListSessionsWithModTime("test-project")
+	if err != nil {
+		t.Fatalf("ListSessionsWithModTime failed: %v", err)
+	}
+
+	// .jsonlファイルのみが返されることを確認
+	if len(sessionInfos) != 1 {
+		t.Errorf("Expected 1 session, got %d", len(sessionInfos))
+	}
+
+	if len(sessionInfos) > 0 && sessionInfos[0].SessionID != "session-1" {
+		t.Errorf("Expected session-1, got %s", sessionInfos[0].SessionID)
+	}
+}
+
+func TestListSessionsWithModTime_EmptyDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+	projectDir := filepath.Join(claudeDir, "empty-project")
+	err := os.MkdirAll(projectDir, 0755)
+	if err != nil {
+		t.Fatalf("Failed to create test directory: %v", err)
+	}
+
+	parser := NewParser(claudeDir)
+
+	sessionInfos, err := parser.ListSessionsWithModTime("empty-project")
+	if err != nil {
+		t.Fatalf("ListSessionsWithModTime failed: %v", err)
+	}
+
+	// 空のスライスが返されることを確認
+	if len(sessionInfos) != 0 {
+		t.Errorf("Expected 0 sessions, got %d", len(sessionInfos))
+	}
+}
+
+func TestListSessionsWithModTime_NonExistentProject(t *testing.T) {
+	tmpDir := t.TempDir()
+	claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+
+	parser := NewParser(claudeDir)
+
+	_, err := parser.ListSessionsWithModTime("non-existent-project")
+	if err == nil {
+		t.Error("Expected error for non-existent project, got nil")
+	}
+}

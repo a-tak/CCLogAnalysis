@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/gitutil"
 	"github.com/a-tak/ccloganalysis/internal/logger"
@@ -45,7 +46,7 @@ func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResul
 	})
 
 	// 各プロジェクトを同期
-	for _, projectName := range projectNames {
+	for i, projectName := range projectNames {
 		log.DebugWithContext("Syncing project", map[string]interface{}{
 			"project": projectName,
 		})
@@ -74,6 +75,21 @@ func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResul
 		result.SessionsSkipped += syncResult.SessionsSkipped
 		result.ErrorCount += syncResult.ErrorCount
 		result.Errors = append(result.Errors, syncResult.Errors...)
+
+		// 10プロジェクトごと、または最後のプロジェクトの場合にグループを同期
+		// これにより、スキャン進行中でもグループが徐々に表示される
+		if (i+1)%10 == 0 || i == len(projectNames)-1 {
+			if err := db.SyncProjectGroups(); err != nil {
+				log.WarnWithContext("Failed to sync project groups during scan", map[string]interface{}{
+					"processed": i + 1,
+					"error":     err.Error(),
+				})
+			} else {
+				log.DebugWithContext("Project groups synchronized", map[string]interface{}{
+					"processed": i + 1,
+				})
+			}
+		}
 	}
 
 	log.InfoWithContext("SyncAll completed", map[string]interface{}{
@@ -126,11 +142,206 @@ func SyncProjectWithLogger(db *DB, p *parser.Parser, projectName string, log *lo
 	return result, nil
 }
 
-// SyncIncremental synchronizes only new sessions (not yet in database)
+// shouldSyncSession determines if a session should be synced based on file modification time
+func shouldSyncSession(sessionID string, fileModTime time.Time, lastScanTime *time.Time, database *DB) (bool, error) {
+	// DBに既に存在するかチェック
+	_, err := database.GetSession(sessionID)
+	if err != nil {
+		// セッションが存在しない → 新規なので同期する
+		return true, nil
+	}
+
+	// 既に存在する場合
+	if lastScanTime == nil {
+		// 初回スキャンではない（セッションが既に存在する） → スキップ
+		return false, nil
+	}
+
+	// ファイルが前回スキャン後に更新されているかチェック
+	if fileModTime.After(*lastScanTime) {
+		// ファイルが前回スキャン後に更新されている → 同期する
+		return true, nil
+	}
+
+	// それ以外 → スキップ
+	return false, nil
+}
+
+// SyncIncremental synchronizes only new or updated sessions since last scan
 func SyncIncremental(db *DB, p *parser.Parser) (*SyncResult, error) {
-	// SyncAllと同じだが、既存セッションはスキップする
-	// 実装上、SyncAllが既に重複チェックを行っているため、同じ動作になる
-	return SyncAll(db, p)
+	log := logger.New()
+	return SyncIncrementalWithLogger(db, p, log)
+}
+
+// SyncIncrementalWithLogger synchronizes only new or updated sessions with custom logger
+func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logger) (*SyncResult, error) {
+	result := &SyncResult{}
+	scanStartTime := time.Now()
+
+	log.Info("Starting SyncIncremental")
+
+	// プロジェクト一覧取得
+	projectNames, err := p.ListProjects()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list projects: %w", err)
+	}
+
+	log.InfoWithContext("Projects found for incremental scan", map[string]interface{}{
+		"count": len(projectNames),
+	})
+
+	for _, projectName := range projectNames {
+		// プロジェクトをDBから取得または作成
+		project, err := database.GetProjectByName(projectName)
+		if err != nil {
+			// プロジェクトが存在しない場合は作成
+			decodedPath := parser.DecodeProjectPath(projectName)
+			projectID, err := database.CreateProject(projectName, decodedPath)
+			if err != nil {
+				log.ErrorWithContext("Failed to create project", map[string]interface{}{
+					"project": projectName,
+					"error":   err.Error(),
+				})
+				result.ErrorCount++
+				continue
+			}
+
+			// 作成したプロジェクトを取得
+			project, err = database.GetProjectByID(projectID)
+			if err != nil {
+				log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+					"project": projectName,
+					"error":   err.Error(),
+				})
+				result.ErrorCount++
+				continue
+			}
+		}
+
+		// 前回のスキャン時刻を取得
+		lastScanTime, err := database.GetProjectLastScanTime(project.ID)
+		if err != nil {
+			log.WarnWithContext("Failed to get last scan time", map[string]interface{}{
+				"project": projectName,
+				"error":   err.Error(),
+			})
+			// エラーでもスキャンは続行（lastScanTimeをnilとして扱う）
+		}
+
+		// セッションファイル一覧とmodTimeを取得
+		sessionInfos, err := p.ListSessionsWithModTime(projectName)
+		if err != nil {
+			log.ErrorWithContext("Failed to list sessions with modTime", map[string]interface{}{
+				"project": projectName,
+				"error":   err.Error(),
+			})
+			result.ErrorCount++
+			continue
+		}
+
+		result.SessionsFound += len(sessionInfos)
+
+		log.DebugWithContext("Processing project sessions", map[string]interface{}{
+			"project":        projectName,
+			"sessions_found": len(sessionInfos),
+			"last_scan_time": lastScanTime,
+		})
+
+		for _, info := range sessionInfos {
+			// スキャン対象か判定
+			shouldSync, err := shouldSyncSession(info.SessionID, info.ModTime, lastScanTime, database)
+			if err != nil {
+				log.ErrorWithContext("Failed to check sync status", map[string]interface{}{
+					"project":    projectName,
+					"session_id": info.SessionID,
+					"error":      err.Error(),
+				})
+				result.ErrorCount++
+				continue
+			}
+
+			if !shouldSync {
+				result.SessionsSkipped++
+				log.DebugWithContext("Skipping unchanged session", map[string]interface{}{
+					"project":    projectName,
+					"session_id": info.SessionID,
+				})
+				continue
+			}
+
+			// セッションをパース
+			log.DebugWithContext("Parsing session", map[string]interface{}{
+				"project":    projectName,
+				"session_id": info.SessionID,
+			})
+
+			session, err := p.ParseSession(projectName, info.SessionID)
+			if err != nil {
+				log.ErrorWithContext("Failed to parse session", map[string]interface{}{
+					"project":    projectName,
+					"session_id": info.SessionID,
+					"error":      err.Error(),
+				})
+				result.ErrorCount++
+				continue
+			}
+
+			// セッションをDBに保存（file_mod_timeも保存）
+			log.DebugWithContext("Saving session to DB", map[string]interface{}{
+				"project":       projectName,
+				"session_id":    info.SessionID,
+				"file_mod_time": info.ModTime,
+			})
+
+			err = database.CreateSession(session, projectName, info.ModTime)
+			if err != nil {
+				if isUniqueConstraintError(err) {
+					result.SessionsSkipped++
+					log.DebugWithContext("Session already exists (skipped)", map[string]interface{}{
+						"project":    projectName,
+						"session_id": info.SessionID,
+					})
+					continue
+				}
+				log.ErrorWithContext("Failed to save session", map[string]interface{}{
+					"project":    projectName,
+					"session_id": info.SessionID,
+					"error":      err.Error(),
+				})
+				result.ErrorCount++
+				continue
+			}
+
+			result.SessionsSynced++
+		}
+
+		// プロジェクトの最終スキャン時刻を更新
+		err = database.UpdateProjectLastScanTime(project.ID, scanStartTime)
+		if err != nil {
+			log.WarnWithContext("Failed to update last scan time", map[string]interface{}{
+				"project": projectName,
+				"error":   err.Error(),
+			})
+			// 警告だけでエラーカウントはしない（次回のスキャンで再度チェックされるため）
+		}
+
+		result.ProjectsProcessed++
+
+		log.InfoWithContext("Project scan completed", map[string]interface{}{
+			"project":          projectName,
+			"sessions_synced":  result.SessionsSynced,
+			"sessions_skipped": result.SessionsSkipped,
+		})
+	}
+
+	log.InfoWithContext("SyncIncremental completed", map[string]interface{}{
+		"projects_processed": result.ProjectsProcessed,
+		"sessions_synced":    result.SessionsSynced,
+		"sessions_skipped":   result.SessionsSkipped,
+		"errors":             result.ErrorCount,
+	})
+
+	return result, nil
 }
 
 // syncProjectInternal is an internal helper that synchronizes a single project
@@ -232,8 +443,8 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		}
 	}
 
-	// セッション一覧を取得
-	sessionIDs, err := p.ListSessions(projectName)
+	// セッション一覧をmodTimeと共に取得
+	sessionInfos, err := p.ListSessionsWithModTime(projectName)
 	if err != nil {
 		log.ErrorWithContext("Failed to list sessions", map[string]interface{}{
 			"project": projectName,
@@ -242,7 +453,7 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
 
-	result.SessionsFound = len(sessionIDs)
+	result.SessionsFound = len(sessionInfos)
 
 	log.InfoWithContext("Sessions found in filesystem", map[string]interface{}{
 		"project": projectName,
@@ -250,19 +461,19 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 	})
 
 	// 各セッションを同期
-	for _, sessionID := range sessionIDs {
+	for _, info := range sessionInfos {
 		log.DebugWithContext("Processing session", map[string]interface{}{
 			"project":    projectName,
-			"session_id": sessionID,
+			"session_id": info.SessionID,
 		})
 
 		// セッションが既にDBに存在するかチェック
-		existingSession, err := db.GetSession(sessionID)
+		existingSession, err := db.GetSession(info.SessionID)
 		if err == nil {
 			// 既に存在する場合はスキップ
 			log.DebugWithContext("Session already exists, skipping", map[string]interface{}{
 				"project":           projectName,
-				"session_id":        sessionID,
+				"session_id":        info.SessionID,
 				"existing_project":  existingSession.ProjectPath,
 			})
 			result.SessionsSkipped++
@@ -270,7 +481,7 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		} else {
 			log.DebugWithContext("Session not found in DB, will sync", map[string]interface{}{
 				"project":    projectName,
-				"session_id": sessionID,
+				"session_id": info.SessionID,
 				"error":      err.Error(),
 			})
 		}
@@ -278,14 +489,14 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		// セッションをパース
 		log.DebugWithContext("Parsing session", map[string]interface{}{
 			"project":    projectName,
-			"session_id": sessionID,
+			"session_id": info.SessionID,
 		})
-		session, err := p.ParseSession(projectName, sessionID)
+		session, err := p.ParseSession(projectName, info.SessionID)
 		if err != nil {
-			errMsg := fmt.Sprintf("%s/%s: %v", projectName, sessionID, err)
+			errMsg := fmt.Sprintf("%s/%s: %v", projectName, info.SessionID, err)
 			log.ErrorWithContext("Failed to parse session", map[string]interface{}{
 				"project":    projectName,
-				"session_id": sessionID,
+				"session_id": info.SessionID,
 				"error":      err.Error(),
 			})
 			result.ErrorCount++
@@ -293,18 +504,19 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 			continue
 		}
 
-		// セッションをDBに保存
+		// セッションをDBに保存（ファイルmodTimeを含む）
 		log.DebugWithContext("Saving session to DB", map[string]interface{}{
-			"project":    projectName,
-			"session_id": sessionID,
+			"project":       projectName,
+			"session_id":    info.SessionID,
+			"file_mod_time": info.ModTime,
 		})
-		err = db.CreateSession(session, projectName)
+		err = db.CreateSession(session, projectName, info.ModTime)
 		if err != nil {
 			// UNIQUE制約エラーの場合は、既に別のプロジェクトで登録済みとしてスキップ
 			if isUniqueConstraintError(err) {
 				log.WarnWithContext("Session already exists (duplicate), skipping", map[string]interface{}{
 					"project":       projectName,
-					"session_id":    sessionID,
+					"session_id":    info.SessionID,
 					"error_message": err.Error(),
 				})
 				result.SessionsSkipped++
@@ -312,10 +524,10 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 			}
 
 			// その他のエラーはエラーとしてカウント
-			errMsg := fmt.Sprintf("%s/%s: %v", projectName, sessionID, err)
+			errMsg := fmt.Sprintf("%s/%s: %v", projectName, info.SessionID, err)
 			log.ErrorWithContext("Failed to save session", map[string]interface{}{
 				"project":    projectName,
-				"session_id": sessionID,
+				"session_id": info.SessionID,
 				"error":      err.Error(),
 			})
 			result.ErrorCount++
@@ -325,7 +537,7 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 
 		log.DebugWithContext("Session synced successfully", map[string]interface{}{
 			"project":    projectName,
-			"session_id": sessionID,
+			"session_id": info.SessionID,
 		})
 
 		result.SessionsSynced++

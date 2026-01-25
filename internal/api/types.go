@@ -199,3 +199,15 @@ type ProjectGroupStatsResponse struct {
 	LastSession              time.Time `json:"lastSession"`
 	ErrorRate                float64   `json:"errorRate"`
 }
+
+// ScanStatusResponse represents the scan status
+type ScanStatusResponse struct {
+	Status            string  `json:"status"`
+	ProjectsProcessed int     `json:"projectsProcessed"`
+	SessionsFound     int     `json:"sessionsFound"`
+	SessionsSynced    int     `json:"sessionsSynced"`
+	ErrorCount        int     `json:"errorCount"`
+	StartedAt         string  `json:"startedAt"`
+	CompletedAt       *string `json:"completedAt,omitempty"`
+	LastError         string  `json:"lastError,omitempty"`
+}

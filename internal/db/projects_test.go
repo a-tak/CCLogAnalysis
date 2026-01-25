@@ -304,3 +304,94 @@ func TestDeleteProject(t *testing.T) {
 		}
 	})
 }
+
+func TestLastScanTime(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("last_scan_timeを更新・取得できる", func(t *testing.T) {
+		// プロジェクト作成
+		name := "scan-test-project"
+		decodedPath := "/path/to/scan-test-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 初期状態ではlast_scan_timeがnil
+		scanTime, err := db.GetProjectLastScanTime(projectID)
+		if err != nil {
+			t.Fatalf("Failed to get last scan time: %v", err)
+		}
+		if scanTime != nil {
+			t.Errorf("Expected last_scan_time to be nil initially, got %v", scanTime)
+		}
+
+		// last_scan_timeを更新
+		now := time.Now()
+		err = db.UpdateProjectLastScanTime(projectID, now)
+		if err != nil {
+			t.Fatalf("Failed to update last scan time: %v", err)
+		}
+
+		// 更新されたlast_scan_timeを取得
+		scanTime, err = db.GetProjectLastScanTime(projectID)
+		if err != nil {
+			t.Fatalf("Failed to get updated last scan time: %v", err)
+		}
+		if scanTime == nil {
+			t.Fatal("Expected last_scan_time to be set, got nil")
+		}
+
+		// 秒単位で比較（RFC3339でデータベースに保存されるため）
+		if scanTime.Unix() != now.Unix() {
+			t.Errorf("Expected last_scan_time=%v, got %v", now, *scanTime)
+		}
+	})
+
+	t.Run("last_scan_timeを複数回更新できる", func(t *testing.T) {
+		// プロジェクト作成
+		name := "scan-update-test-project"
+		decodedPath := "/path/to/scan-update-test-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 1回目の更新
+		firstTime := time.Now()
+		err = db.UpdateProjectLastScanTime(projectID, firstTime)
+		if err != nil {
+			t.Fatalf("Failed to update last scan time (1st): %v", err)
+		}
+
+		// 少し待って2回目の更新
+		time.Sleep(10 * time.Millisecond)
+		secondTime := time.Now()
+		err = db.UpdateProjectLastScanTime(projectID, secondTime)
+		if err != nil {
+			t.Fatalf("Failed to update last scan time (2nd): %v", err)
+		}
+
+		// 最新のlast_scan_timeを取得
+		scanTime, err := db.GetProjectLastScanTime(projectID)
+		if err != nil {
+			t.Fatalf("Failed to get last scan time: %v", err)
+		}
+		if scanTime == nil {
+			t.Fatal("Expected last_scan_time to be set, got nil")
+		}
+
+		// 2回目の時刻が保存されていることを確認
+		if scanTime.Unix() != secondTime.Unix() {
+			t.Errorf("Expected last_scan_time=%v, got %v", secondTime, *scanTime)
+		}
+	})
+
+	t.Run("存在しないプロジェクトIDでエラーを返す", func(t *testing.T) {
+		_, err := db.GetProjectLastScanTime(99999)
+		if err == nil {
+			t.Error("Expected error for non-existent project, got nil")
+		}
+	})
+}

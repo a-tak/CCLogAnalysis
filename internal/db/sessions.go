@@ -28,7 +28,7 @@ type SessionRow struct {
 }
 
 // CreateSession creates a new session and all related data in a transaction
-func (db *DB) CreateSession(session *parser.Session, projectName string) error {
+func (db *DB) CreateSession(session *parser.Session, projectName string, fileModTime time.Time) error {
 	// トランザクション開始
 	tx, err := db.conn.Begin()
 	if err != nil {
@@ -56,8 +56,8 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 			id, project_id, git_branch, start_time, end_time, duration_seconds,
 			total_input_tokens, total_output_tokens,
 			total_cache_creation_tokens, total_cache_read_tokens,
-			error_count, first_user_message
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			error_count, first_user_message, file_mod_time
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err = tx.Exec(sessionQuery,
 		session.ID, projectID, session.GitBranch,
@@ -66,6 +66,7 @@ func (db *DB) CreateSession(session *parser.Session, projectName string) error {
 		session.TotalTokens.CacheCreationInputTokens, session.TotalTokens.CacheReadInputTokens,
 		session.ErrorCount,
 		firstUserMessage,
+		fileModTime.Format(time.RFC3339),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to insert session: %w", err)

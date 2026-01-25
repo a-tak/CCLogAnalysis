@@ -7,11 +7,18 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // Parser handles JSONL log file parsing
 type Parser struct {
 	claudeDir string
+}
+
+// SessionFileInfo holds session ID and file modification time
+type SessionFileInfo struct {
+	SessionID string
+	ModTime   time.Time
 }
 
 // NewParser creates a new Parser instance
@@ -74,6 +81,31 @@ func (p *Parser) ListSessions(projectName string) ([]string, error) {
 	for _, entry := range entries {
 		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
 			sessions = append(sessions, strings.TrimSuffix(entry.Name(), ".jsonl"))
+		}
+	}
+	return sessions, nil
+}
+
+// ListSessionsWithModTime returns session IDs with file modification times
+func (p *Parser) ListSessionsWithModTime(projectName string) ([]SessionFileInfo, error) {
+	projectDir := filepath.Join(p.claudeDir, projectName)
+	entries, err := os.ReadDir(projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read project directory: %w", err)
+	}
+
+	var sessions []SessionFileInfo
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
+			info, err := entry.Info()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get file info for %s: %w", entry.Name(), err)
+			}
+
+			sessions = append(sessions, SessionFileInfo{
+				SessionID: strings.TrimSuffix(entry.Name(), ".jsonl"),
+				ModTime:   info.ModTime(),
+			})
 		}
 	}
 	return sessions, nil

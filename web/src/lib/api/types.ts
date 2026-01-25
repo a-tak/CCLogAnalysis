@@ -178,3 +178,15 @@ export interface ProjectGroupStats {
   lastSession: string
   errorRate: number
 }
+
+// Scan Status
+export interface ScanStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed'
+  projectsProcessed: number
+  sessionsFound: number
+  sessionsSynced: number
+  errorCount: number
+  startedAt: string
+  completedAt?: string
+  lastError?: string
+}

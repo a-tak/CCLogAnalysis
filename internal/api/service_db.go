@@ -27,10 +27,8 @@ func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessi
 		logger: logger.New(),
 	}
 
-	// 初回起動時に自動同期
-	if p != nil {
-		service.autoSyncIfNeeded()
-	}
+	// Note: Initial sync is now handled by ScanManager in main.go
+	// autoSyncIfNeeded is no longer called here to avoid duplicate scans
 
 	return service
 }
