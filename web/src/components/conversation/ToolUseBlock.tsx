@@ -6,7 +6,7 @@ interface ToolUseBlockProps {
 }
 
 export function ToolUseBlock({ toolUse }: ToolUseBlockProps) {
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(true)
 
   return (
     <div className="border border-primary/20 rounded-md p-3 bg-primary/5">

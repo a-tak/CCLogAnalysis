@@ -7,7 +7,7 @@ interface ToolResultBlockProps {
 }
 
 export function ToolResultBlock({ toolResult }: ToolResultBlockProps) {
-  const [expanded, setExpanded] = useState(toolResult.is_error || false)
+  const [expanded, setExpanded] = useState(true)
   const isError = toolResult.is_error || false
 
   return (

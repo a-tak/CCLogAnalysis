@@ -17,7 +17,7 @@ export function MessageItem({ message }: MessageItemProps) {
   return (
     <div className={cn(
       "flex",
-      isUser ? "justify-start" : "justify-end"
+      isUser ? "justify-end" : "justify-start"
     )}>
       <div className={cn(
         "max-w-3xl rounded-lg p-4",
