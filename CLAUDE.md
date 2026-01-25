@@ -66,12 +66,9 @@ cd C:\Users\{username}\.claude\projects\{project-name}
 - **必須**: すべての新機能は「テスト→実装→リファクタリング」のサイクルで開発
 - 詳細は `.claude/rules/general.md` を参照
 
-### プランファイル命名規則
+### プランファイル
 
-- プランファイルは `.claude/plans/` ディレクトリに配置
-- 命名形式: `YYYY-MM-DD_タスク名.md`（日本語）
-- タスク名はわかりやすく、具体的に記述
-- 例: `.claude/plans/2026-01-24_ファイル監視機能実装.md`
+- 詳細は `.claude/rules/plans.md` を参照
 
 ### ドキュメント作成時
 

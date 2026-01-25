@@ -46,6 +46,22 @@ func (p *Parser) ListProjects() ([]string, error) {
 	return projects, nil
 }
 
+// GetProjectDir returns the absolute path to a project directory
+func (p *Parser) GetProjectDir(projectName string) (string, error) {
+	projectDir := filepath.Join(p.claudeDir, projectName)
+
+	// ディレクトリが存在するか確認
+	info, err := os.Stat(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("project directory does not exist: %w", err)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("project path is not a directory: %s", projectDir)
+	}
+
+	return projectDir, nil
+}
+
 // ListSessions returns all session files in a project
 func (p *Parser) ListSessions(projectName string) ([]string, error) {
 	projectDir := filepath.Join(p.claudeDir, projectName)
@@ -158,6 +174,39 @@ func (p *Parser) ParseFile(filePath string) (*Session, error) {
 	}
 
 	return session, nil
+}
+
+// GetProjectWorkingDirectory returns the actual working directory for a project
+// by parsing available sessions and extracting the cwd field from the first session that has it
+func (p *Parser) GetProjectWorkingDirectory(projectName string) (string, error) {
+	// セッション一覧を取得
+	sessions, err := p.ListSessions(projectName)
+	if err != nil {
+		return "", fmt.Errorf("failed to list sessions: %w", err)
+	}
+
+	// セッションが存在しない場合はエラー
+	if len(sessions) == 0 {
+		return "", fmt.Errorf("no sessions found for project")
+	}
+
+	// 複数のセッションをループで試す（cwdフィールドが見つかるまで）
+	for _, sessionID := range sessions {
+		session, err := p.ParseSession(projectName, sessionID)
+		if err != nil {
+			// パースエラーは警告のみで次のセッションを試す
+			fmt.Printf("Warning: failed to parse session %s: %v\n", sessionID, err)
+			continue
+		}
+
+		// ProjectPath（cwd）が見つかったら返す
+		if session.ProjectPath != "" {
+			return session.ProjectPath, nil
+		}
+	}
+
+	// すべてのセッションでcwdが見つからなかった
+	return "", fmt.Errorf("working directory not found in any session")
 }
 
 // DecodeProjectPath decodes an encoded project folder name

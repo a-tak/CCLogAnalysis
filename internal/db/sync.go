@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/a-tak/ccloganalysis/internal/gitutil"
 	"github.com/a-tak/ccloganalysis/internal/logger"
 	"github.com/a-tak/ccloganalysis/internal/parser"
 )
@@ -82,6 +83,14 @@ func SyncAllWithLogger(db *DB, p *parser.Parser, log *logger.Logger) (*SyncResul
 		"error_count":        result.ErrorCount,
 	})
 
+	// プロジェクトグループを自動的に同期
+	if err := db.SyncProjectGroups(); err != nil {
+		log.WarnWithContext("Failed to sync project groups", map[string]interface{}{
+			"error": err.Error(),
+		})
+		// エラーが発生しても処理を続行（同期処理全体は失敗させない）
+	}
+
 	return result, nil
 }
 
@@ -147,7 +156,32 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		})
 
 		decodedPath := parser.DecodeProjectPath(projectName)
-		_, err = db.CreateProject(projectName, decodedPath)
+
+		// 実際の作業ディレクトリを取得
+		workingDir, err := p.GetProjectWorkingDirectory(projectName)
+		if err != nil {
+			// セッションが存在しない、またはcwdが取得できない
+			log.WarnWithContext("Could not get working directory", map[string]interface{}{
+				"project": projectName,
+				"error":   err.Error(),
+			})
+			_, err = db.CreateProject(projectName, decodedPath)
+		} else {
+			// 実際の作業ディレクトリでGit Root検出
+			gitRoot, gitErr := gitutil.DetectGitRoot(workingDir)
+			if gitErr != nil {
+				log.WarnWithContext("Failed to detect git root", map[string]interface{}{
+					"project": projectName,
+					"error":   gitErr.Error(),
+				})
+				_, err = db.CreateProject(projectName, decodedPath)
+			} else if gitRoot != "" {
+				_, err = db.CreateProjectWithGitRoot(projectName, decodedPath, gitRoot)
+			} else {
+				_, err = db.CreateProject(projectName, decodedPath)
+			}
+		}
+
 		if err != nil {
 			log.ErrorWithContext("Failed to create project", map[string]interface{}{
 				"project": projectName,
@@ -164,6 +198,37 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 				"error":   err.Error(),
 			})
 			return nil, fmt.Errorf("failed to get created project: %w", err)
+		}
+	} else if project.GitRoot == nil {
+		// 既存プロジェクトでGit Rootが未設定の場合、検出して更新
+		workingDir, err := p.GetProjectWorkingDirectory(projectName)
+		if err != nil {
+			log.WarnWithContext("Could not get working directory for existing project", map[string]interface{}{
+				"project": projectName,
+				"error":   err.Error(),
+			})
+		} else {
+			gitRoot, gitErr := gitutil.DetectGitRoot(workingDir)
+			if gitErr != nil {
+				log.WarnWithContext("Failed to detect git root for existing project", map[string]interface{}{
+					"project": projectName,
+					"error":   gitErr.Error(),
+				})
+			} else if gitRoot != "" {
+				// Git Root検出成功、更新
+				err = db.UpdateProjectGitRoot(project.ID, gitRoot)
+				if err != nil {
+					log.WarnWithContext("Failed to update git root", map[string]interface{}{
+						"project": projectName,
+						"error":   err.Error(),
+					})
+				} else {
+					log.InfoWithContext("Updated git root for project", map[string]interface{}{
+						"project":  projectName,
+						"git_root": gitRoot,
+					})
+				}
+			}
 		}
 	}
 
@@ -248,14 +313,6 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		})
 
 		result.SessionsSynced++
-	}
-
-	// GitRootの更新（セッションから取得できる場合）
-	if len(sessionIDs) > 0 && result.SessionsSynced > 0 {
-		// 最初のセッションからGitルートを推測
-		// 実装は簡略化: ProjectPathからGitルートを設定することも可能
-		// 現時点ではスキップ（将来の拡張として）
-		_ = project
 	}
 
 	return result, nil

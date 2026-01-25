@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
@@ -267,6 +268,210 @@ func (s *DatabaseSessionService) Analyze(projectNames []string) (*AnalyzeRespons
 		SessionsParsed: result.SessionsSynced,
 		ErrorCount:     result.ErrorCount,
 		Message:        fmt.Sprintf("Synced %d sessions from %d projects", result.SessionsSynced, result.ProjectsProcessed),
+	}, nil
+}
+
+// GetProjectStats returns project-level statistics
+func (s *DatabaseSessionService) GetProjectStats(projectName string) (*ProjectStatsResponse, error) {
+	// プロジェクトの存在確認
+	project, err := s.db.GetProjectByName(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	// プロジェクト統計を取得
+	stats, err := s.db.GetProjectStats(project.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project stats: %w", err)
+	}
+
+	return &ProjectStatsResponse{
+		TotalSessions:            stats.TotalSessions,
+		TotalInputTokens:         stats.TotalInputTokens,
+		TotalOutputTokens:        stats.TotalOutputTokens,
+		TotalCacheCreationTokens: stats.TotalCacheCreationTokens,
+		TotalCacheReadTokens:     stats.TotalCacheReadTokens,
+		TotalTokens:              stats.TotalInputTokens + stats.TotalOutputTokens,
+		AvgTokens:                stats.AvgTokens,
+		FirstSession:             stats.FirstSession,
+		LastSession:              stats.LastSession,
+		ErrorRate:                stats.ErrorRate,
+	}, nil
+}
+
+// GetProjectTimeline returns time-series statistics for a project
+func (s *DatabaseSessionService) GetProjectTimeline(projectName, period string, limit int) (*TimeSeriesResponse, error) {
+	// プロジェクトの存在確認
+	project, err := s.db.GetProjectByName(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("project not found: %w", err)
+	}
+
+	// periodのデフォルト値
+	if period == "" {
+		period = "day"
+	}
+
+	// limitのデフォルト値
+	if limit <= 0 {
+		limit = 30
+	}
+
+	// 時系列統計を取得
+	timeSeriesStats, err := s.db.GetTimeSeriesStats(project.ID, period, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get timeline stats: %w", err)
+	}
+
+	// レスポンスに変換
+	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
+	for _, ts := range timeSeriesStats {
+		dataPoints = append(dataPoints, TimeSeriesDataPoint{
+			PeriodStart:              ts.PeriodStart,
+			PeriodEnd:                ts.PeriodEnd,
+			SessionCount:             ts.SessionCount,
+			TotalInputTokens:         ts.TotalInputTokens,
+			TotalOutputTokens:        ts.TotalOutputTokens,
+			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
+			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
+		})
+	}
+
+	return &TimeSeriesResponse{
+		Period: period,
+		Data:   dataPoints,
+	}, nil
+}
+
+// ListProjectGroups returns all project groups
+func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, error) {
+	// 1. 全グループを取得
+	groupRows, err := s.db.ListProjectGroups()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list project groups: %w", err)
+	}
+
+	// 2. 除外対象のグループIDを取得（ワークツリーグループのメンバー）
+	hiddenGroupIDs, err := s.db.GetStandaloneGroupsInWorktreeGroups()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get hidden group ids: %w", err)
+	}
+
+	// 3. 除外対象のグループIDを取得（名前にworktreeを含む）
+	worktreeNameGroupIDs, err := s.db.GetStandaloneGroupsWithWorktreeName()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get worktree name group ids: %w", err)
+	}
+
+	// 4. 除外対象をmapに変換（O(1)検索用）
+	hiddenMap := make(map[int64]bool)
+	for _, id := range hiddenGroupIDs {
+		hiddenMap[id] = true
+	}
+	for _, id := range worktreeNameGroupIDs {
+		hiddenMap[id] = true
+	}
+
+	// 5. フィルタリング
+	groups := make([]ProjectGroupResponse, 0, len(groupRows))
+	for _, row := range groupRows {
+		// 除外対象でない場合のみ追加
+		if !hiddenMap[row.ID] {
+			groups = append(groups, ProjectGroupResponse{
+				ID:        row.ID,
+				Name:      row.Name,
+				GitRoot:   row.GitRoot,
+				CreatedAt: row.CreatedAt,
+				UpdatedAt: row.UpdatedAt,
+			})
+		}
+	}
+
+	// 6. ソート: git_rootが設定されているグループを先頭に、その後は名前順
+	sort.Slice(groups, func(i, j int) bool {
+		// git_rootの有無で優先順位を決定
+		iHasGitRoot := groups[i].GitRoot != nil
+		jHasGitRoot := groups[j].GitRoot != nil
+
+		if iHasGitRoot != jHasGitRoot {
+			// git_rootがあるグループを先頭に
+			return iHasGitRoot
+		}
+
+		// git_rootの有無が同じ場合は、名前順でソート
+		return groups[i].Name < groups[j].Name
+	})
+
+	return groups, nil
+}
+
+// GetProjectGroup returns detailed project group information with member projects
+func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDetailResponse, error) {
+	// グループ基本情報を取得
+	group, err := s.db.GetProjectGroupByID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	// グループ内のプロジェクトを取得
+	projectRows, err := s.db.GetProjectsByGroupID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get projects in group: %w", err)
+	}
+
+	// プロジェクトレスポンスに変換
+	projects := make([]ProjectResponse, 0, len(projectRows))
+	for _, row := range projectRows {
+		// セッション数を取得
+		sessionCount, err := s.db.CountSessions(row.ID)
+		if err != nil {
+			fmt.Printf("Warning: failed to count sessions for project %s: %v\n", row.Name, err)
+			sessionCount = 0
+		}
+
+		projects = append(projects, ProjectResponse{
+			Name:         row.Name,
+			DecodedPath:  row.DecodedPath,
+			SessionCount: sessionCount,
+		})
+	}
+
+	return &ProjectGroupDetailResponse{
+		ID:        group.ID,
+		Name:      group.Name,
+		GitRoot:   group.GitRoot,
+		CreatedAt: group.CreatedAt,
+		UpdatedAt: group.UpdatedAt,
+		Projects:  projects,
+	}, nil
+}
+
+// GetProjectGroupStats returns statistics for a project group
+func (s *DatabaseSessionService) GetProjectGroupStats(groupID int64) (*ProjectGroupStatsResponse, error) {
+	// グループの存在確認
+	_, err := s.db.GetProjectGroupByID(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("group not found: %w", err)
+	}
+
+	// グループ統計を取得
+	stats, err := s.db.GetGroupStats(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group stats: %w", err)
+	}
+
+	return &ProjectGroupStatsResponse{
+		TotalProjects:            stats.TotalProjects,
+		TotalSessions:            stats.TotalSessions,
+		TotalInputTokens:         stats.TotalInputTokens,
+		TotalOutputTokens:        stats.TotalOutputTokens,
+		TotalCacheCreationTokens: stats.TotalCacheCreationTokens,
+		TotalCacheReadTokens:     stats.TotalCacheReadTokens,
+		AvgTokens:                stats.AvgTokens,
+		FirstSession:             stats.FirstSession,
+		LastSession:              stats.LastSession,
+		ErrorRate:                stats.ErrorRate,
 	}, nil
 }
 

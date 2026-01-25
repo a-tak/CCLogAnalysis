@@ -5,14 +5,45 @@
     "claude-md-management@claude-plugins-official": true,
     "gopls-lsp@claude-plugins-official": true
   },
-  "plansDirectory": "./.claude/plans",
   "permissions": {
     "allow": [
+      "Bash(./bin/ccloganalysis:*)",
       "Bash(.claude/skills/server-management/scripts/start-server.sh:*)",
       "Bash(.claude/skills/server-management/scripts/stop-server.sh:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(done)",
+      "Bash(git log:*)",
+      "Bash(git restore:*)",
+      "Bash(go build:*)",
+      "Bash(go clean:*)",
+      "Bash(go run:*)",
       "Bash(go test:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(kill:*)",
+      "Bash(killall:*)",
+      "Bash(ls:*)",
+      "Bash(lsof:*)",
       "Bash(make build-frontend:*)",
-      "Bash(npm run lint:*)"
+      "Bash(npm install:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run lint:*)",
+      "Bash(pkill:*)",
+      "Bash(sqlite3:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(xargs kill:*)",
+      "Skill(server-management)",
+      "mcp__plugin_playwright_playwright__browser_click",
+      "mcp__plugin_playwright_playwright__browser_evaluate",
+      "mcp__plugin_playwright_playwright__browser_navigate",
+      "mcp__plugin_playwright_playwright__browser_run_code",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_take_screenshot",
+      "mcp__plugin_playwright_playwright__browser_wait_for"
     ]
-  }
+  },
+  "plansDirectory": "./.claude/plans"
 }

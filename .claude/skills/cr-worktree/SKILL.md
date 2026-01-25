@@ -182,7 +182,8 @@ gh issue view <Issue番号> --json title
 
 1. ブランチ名自動生成 → 説明文を英語に変換 + kebab-case化
 2. `FROM_CURRENT` フラグを確認
-3. スクリプト実行 → `.claude/skills/cr-worktree/scripts/cr-worktree.sh <生成したブランチ名> [--from-current]`
+3. スクリプト実行 → `.claude/skills/cr-worktree/scripts/cr-worktree.sh <生成したブランチ名> [--from-current] --with-description="<説明文>"`
+4. WIPドキュメント自動生成 → worktree内の`docs/WIP/`に配置
 
 **実装例:**
 
@@ -190,11 +191,17 @@ gh issue view <Issue番号> --json title
 # 説明文: "ログパーサーのバグ修正"
 # 生成ブランチ名: fix-log-parser-bug
 
-.claude/skills/cr-worktree/scripts/cr-worktree.sh fix-log-parser-bug
+.claude/skills/cr-worktree/scripts/cr-worktree.sh fix-log-parser-bug --with-description="ログパーサーのバグ修正"
 
 # オプション付き
-.claude/skills/cr-worktree/scripts/cr-worktree.sh fix-log-parser-bug --from-current
+.claude/skills/cr-worktree/scripts/cr-worktree.sh fix-log-parser-bug --from-current --with-description="ログパーサーのバグ修正"
 ```
+
+**WIPドキュメント仕様:**
+- ファイル名: `docs/WIP/YYYY-MM-DD_<説明文50文字>.md`
+- 既存のWIPドキュメント形式に準拠
+- 自動生成後は未追跡ファイルとして残る（git add不要）
+- Claude起動時に即座に参照可能
 
 ---
 

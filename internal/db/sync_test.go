@@ -536,3 +536,258 @@ func TestSyncResult_ErrorDetails(t *testing.T) {
 	})
 }
 */
+
+func TestGitRootDetection(t *testing.T) {
+	database, _ := setupTestDB(t)
+	defer database.Close()
+
+	t.Run("通常のGitリポジトリでGit Rootが検出される", func(t *testing.T) {
+		// テスト用のClaudeディレクトリとGitリポジトリを作成
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		projectDir := filepath.Join(claudeDir, "git-repo-project")
+		err := os.MkdirAll(projectDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create project directory: %v", err)
+		}
+
+		// .gitディレクトリを作成
+		gitDir := filepath.Join(projectDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create .git directory: %v", err)
+		}
+
+		// セッションファイルを作成
+		sessionPath := filepath.Join(projectDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","cwd":"` + projectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T10:00:05Z","sessionId":"session-1","uuid":"uuid-2","parentUuid":"uuid-1","cwd":"` + projectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// パーサーとsync実行
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(database, p)
+		if err != nil {
+			t.Fatalf("SyncAll failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootを確認
+		project, err := database.GetProjectByName("git-repo-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+
+		if project.GitRoot == nil {
+			t.Error("Expected git_root to be set, got nil")
+		} else if *project.GitRoot != projectDir {
+			t.Errorf("Expected git_root %s, got %s", projectDir, *project.GitRoot)
+		}
+	})
+
+	t.Run("Gitワークツリーで親リポジトリのGit Rootが検出される", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// テスト用のClaudeディレクトリとワークツリーを作成
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		worktreeDir := filepath.Join(claudeDir, "worktree-project")
+		err := os.MkdirAll(worktreeDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create worktree directory: %v", err)
+		}
+
+		// 親リポジトリのパス
+		parentRepoPath := "/path/to/parent/repo.git"
+
+		// .gitファイルを作成（gitdir指定）
+		gitFilePath := filepath.Join(worktreeDir, ".git")
+		gitFileContent := "gitdir: " + parentRepoPath + "/worktrees/feature\n"
+		err = os.WriteFile(gitFilePath, []byte(gitFileContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create .git file: %v", err)
+		}
+
+		// セッションファイルを作成
+		sessionPath := filepath.Join(worktreeDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","cwd":"` + worktreeDir + `","version":"1.0.0","gitBranch":"feature","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T10:00:05Z","sessionId":"session-1","uuid":"uuid-2","parentUuid":"uuid-1","cwd":"` + worktreeDir + `","version":"1.0.0","gitBranch":"feature","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// パーサーとsync実行
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("SyncAll failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootを確認
+		project, err := newDB.GetProjectByName("worktree-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+
+		if project.GitRoot == nil {
+			t.Error("Expected git_root to be set, got nil")
+		} else if *project.GitRoot != parentRepoPath {
+			t.Errorf("Expected git_root %s, got %s", parentRepoPath, *project.GitRoot)
+		}
+	})
+
+	t.Run("Git管理外のプロジェクトでgit_rootがnullになる", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// テスト用のClaudeディレクトリとGit管理外のプロジェクトを作成
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		nonGitDir := filepath.Join(claudeDir, "non-git-project")
+		err := os.MkdirAll(nonGitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create non-git directory: %v", err)
+		}
+
+		// セッションファイルを作成（.gitなし）
+		sessionPath := filepath.Join(nonGitDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","cwd":"` + nonGitDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T10:00:05Z","sessionId":"session-1","uuid":"uuid-2","parentUuid":"uuid-1","cwd":"` + nonGitDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// パーサーとsync実行
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("SyncAll failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootを確認
+		project, err := newDB.GetProjectByName("non-git-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+
+		if project.GitRoot != nil {
+			t.Errorf("Expected git_root to be null, got %s", *project.GitRoot)
+		}
+	})
+
+	t.Run("既存プロジェクトでgit_rootが未設定の場合、更新される", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// テスト用のClaudeディレクトリとGitリポジトリを作成
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		projectDir := filepath.Join(claudeDir, "existing-project")
+		err := os.MkdirAll(projectDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create project directory: %v", err)
+		}
+
+		// セッションファイルを作成（最初は.gitなし）
+		sessionPath := filepath.Join(projectDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T10:00:00Z","sessionId":"session-1","uuid":"uuid-1","cwd":"` + projectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T10:00:05Z","sessionId":"session-1","uuid":"uuid-2","parentUuid":"uuid-1","cwd":"` + projectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":10,"output_tokens":5,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// パーサーとsync実行（.gitなし）
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("First sync failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootがnullであることを確認
+		project, err := newDB.GetProjectByName("existing-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+		if project.GitRoot != nil {
+			t.Errorf("Expected git_root to be null initially, got %s", *project.GitRoot)
+		}
+
+		// .gitディレクトリを作成
+		gitDir := filepath.Join(projectDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create .git directory: %v", err)
+		}
+
+		// 再度sync実行
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("Second sync failed: %v", err)
+		}
+
+		// プロジェクトを再取得してGit Rootが更新されたことを確認
+		project, err = newDB.GetProjectByName("existing-project")
+		if err != nil {
+			t.Fatalf("Failed to get project after update: %v", err)
+		}
+
+		if project.GitRoot == nil {
+			t.Error("Expected git_root to be updated, still null")
+		} else if *project.GitRoot != projectDir {
+			t.Errorf("Expected git_root %s, got %s", projectDir, *project.GitRoot)
+		}
+	})
+
+	t.Run("セッションが存在しないプロジェクトでgit_rootがnullになる", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// テスト用のClaudeディレクトリとプロジェクトを作成（セッションなし）
+		tmpDir := t.TempDir()
+		claudeDir := filepath.Join(tmpDir, ".claude", "projects")
+		projectDir := filepath.Join(claudeDir, "no-session-project")
+		err := os.MkdirAll(projectDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create project directory: %v", err)
+		}
+
+		// .gitディレクトリを作成（Git管理下だが、セッションがない）
+		gitDir := filepath.Join(projectDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create .git directory: %v", err)
+		}
+
+		// パーサーとsync実行（セッションなし）
+		p := parser.NewParser(claudeDir)
+		_, err = SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("SyncAll failed: %v", err)
+		}
+
+		// プロジェクトを取得してGit Rootがnullであることを確認
+		// セッションが存在しないため、実際の作業ディレクトリが取得できず、
+		// Git Root検出がスキップされる
+		project, err := newDB.GetProjectByName("no-session-project")
+		if err != nil {
+			t.Fatalf("Failed to get project: %v", err)
+		}
+		if project.GitRoot != nil {
+			t.Errorf("Expected git_root to be null (no sessions), got %s", *project.GitRoot)
+		}
+	})
+}

@@ -116,9 +116,14 @@ func (h *Handler) Routes() http.Handler {
 	// API endpoints
 	mux.HandleFunc("GET /api/health", h.healthHandler)
 	mux.HandleFunc("GET /api/projects", h.listProjectsHandler)
+	mux.HandleFunc("GET /api/projects/{name}/stats", h.getProjectStatsHandler)
+	mux.HandleFunc("GET /api/projects/{name}/timeline", h.getProjectTimelineHandler)
 	mux.HandleFunc("GET /api/sessions", h.listSessionsHandler)
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)
+	mux.HandleFunc("GET /api/groups", h.listGroupsHandler)
+	mux.HandleFunc("GET /api/groups/{id}", h.getGroupHandler)
+	mux.HandleFunc("GET /api/groups/{id}/stats", h.getGroupStatsHandler)
 
 	// Debug endpoint (only available when using DatabaseSessionService)
 	if h.dbService != nil {
