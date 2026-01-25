@@ -1,14 +1,16 @@
 # GoReleaser configuration for CCLogAnalysis
 # Documentation: https://goreleaser.com
 
+version: 2
+
 project_name: ccloganalysis
 
 before:
   hooks:
     # Build React frontend before building Go backend
-    - cd web && npm ci && npm run build
-    - rm -rf internal/static/dist
-    - cp -r web/dist internal/static/
+    - sh -c "cd web && npm ci && npm run build"
+    - sh -c "rm -rf internal/static/dist"
+    - sh -c "cp -r web/dist internal/static/"
 
 builds:
   - id: ccloganalysis
@@ -41,17 +43,17 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
-    format_overrides:
-      - goos: windows
-        format: zip
-
     # Archive naming: ccloganalysis_<version>_<os>_<arch>
     name_template: >-
       {{ .ProjectName }}_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
+
+    # Format by OS (tar.gz for Unix-like, zip for Windows)
+    format_overrides:
+      - goos: windows
+        format: zip
 
     # Include README and LICENSE
     files:
