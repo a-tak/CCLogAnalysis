@@ -132,7 +132,6 @@ func (m *ScanManager) runScan(ctx context.Context) {
 		m.progress.Status = ScanStatusFailed
 		m.progress.LastError = err.Error()
 		m.progress.CompletedAt = &now
-		fmt.Printf("Scan failed: %v\n", err)
 		return
 	}
 
@@ -148,7 +147,4 @@ func (m *ScanManager) runScan(ctx context.Context) {
 	if result.ErrorCount > 0 {
 		m.progress.LastError = fmt.Sprintf("%d errors occurred during scan", result.ErrorCount)
 	}
-
-	fmt.Printf("Scan completed: %d projects, %d sessions synced\n",
-		result.ProjectsProcessed, result.SessionsSynced)
 }
