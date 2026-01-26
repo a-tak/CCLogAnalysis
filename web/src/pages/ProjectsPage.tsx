@@ -7,53 +7,22 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { api, ApiError } from '@/lib/api/client'
-import type { Project, ProjectGroup, TotalStats, TimeSeriesResponse, DailyStatsResponse } from '@/lib/api/types'
+import type { DailyStatsResponse } from '@/lib/api/types'
 import { Folder, GitBranch, Activity, Zap, AlertCircle, Layers, X } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useProjectsPolling } from '@/hooks/useProjectsPolling'
 
 export function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [groups, setGroups] = useState<ProjectGroup[]>([])
-  const [totalStats, setTotalStats] = useState<TotalStats | null>(null)
-  const [timeline, setTimeline] = useState<TimeSeriesResponse | null>(null)
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // 15秒ごとにポーリングしてデータを自動更新
+  const { projects, groups, totalStats, timeline, loading, error } = useProjectsPolling(period)
 
   // Drilldown state
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStatsResponse | null>(null)
   const [dailyLoading, setDailyLoading] = useState(false)
   const [dailyError, setDailyError] = useState<string | null>(null)
-
-  useEffect(() => {
-    async function loadData() {
-      try {
-        setLoading(true)
-        setError(null)
-        const [projectsRes, groupsRes, statsRes, timelineRes] = await Promise.all([
-          api.getProjects(),
-          api.getProjectGroups(),
-          api.getTotalStats(),
-          api.getTotalTimeline(period, 30),
-        ])
-        setProjects(projectsRes.projects)
-        setGroups(groupsRes.groups)
-        setTotalStats(statsRes)
-        setTimeline(timelineRes)
-      } catch (err) {
-        if (err instanceof ApiError) {
-          setError(err.message)
-        } else {
-          setError('Failed to load data')
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadData()
-  }, [period])
 
   // Fetch daily stats when date is selected
   useEffect(() => {
