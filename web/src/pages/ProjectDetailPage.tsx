@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 import type { ProjectStats, TimeSeriesResponse, SessionSummary } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ArrowLeft, Activity, Zap, TrendingUp, AlertCircle } from 'lucide-react'
+import { Activity, Zap, TrendingUp, AlertCircle } from 'lucide-react'
 import { SessionListTab } from '@/components/sessions/SessionListTab'
+import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 
 export default function ProjectDetailPage() {
   const { name } = useParams<{ name: string }>()
@@ -67,8 +68,8 @@ export default function ProjectDetailPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">読み込み中...</p>
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">読み込み中...</p>
         </div>
       </div>
     )
@@ -77,14 +78,7 @@ export default function ProjectDetailPage() {
   if (error || !stats) {
     return (
       <div className="container mx-auto py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/projects">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              プロジェクト一覧に戻る
-            </Link>
-          </Button>
-        </div>
+        <Breadcrumb items={[{ label: 'エラー' }]} />
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive">エラー</CardTitle>
@@ -102,16 +96,10 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="container mx-auto py-8">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/projects">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            プロジェクト一覧に戻る
-          </Link>
-        </Button>
-        <h1 className="text-3xl font-bold">{name}</h1>
-      </div>
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: name || 'プロジェクト' }]} />
+
+      <h1 className="text-3xl font-bold mb-6">{name}</h1>
 
       {/* タブUI */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>

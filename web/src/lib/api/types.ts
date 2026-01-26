@@ -148,7 +148,7 @@ export interface TimeSeriesResponse {
 export interface ProjectGroup {
   id: number
   name: string
-  gitRoot: string
+  gitRoot: string | null
   createdAt: string
   updatedAt: string
 }
@@ -160,7 +160,7 @@ export interface ProjectGroupListResponse {
 export interface ProjectGroupDetail {
   id: number
   name: string
-  gitRoot: string
+  gitRoot: string | null
   createdAt: string
   updatedAt: string
   projects: Project[]
@@ -190,4 +190,37 @@ export interface ScanStatus {
   startedAt: string
   completedAt?: string
   lastError?: string
+}
+
+// Total Statistics (all projects combined)
+export interface TotalStats {
+  totalGroups: number
+  totalProjects: number
+  totalSessions: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+  avgTokens: number
+  firstSession: string
+  lastSession: string
+  errorRate: number
+}
+
+// Daily Group Statistics (for drilldown)
+export interface DailyGroupStats {
+  groupId: number
+  groupName: string
+  sessionCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+}
+
+export interface DailyStatsResponse {
+  date: string
+  groups: DailyGroupStats[]
 }
