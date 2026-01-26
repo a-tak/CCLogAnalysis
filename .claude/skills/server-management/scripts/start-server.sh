@@ -71,17 +71,15 @@ case "$MODE" in
     dev)
         export LOG_LEVEL="DEBUG"
         export SKIP_INITIAL_SYNC="1"
-        export ENABLE_FILE_WATCH="true"
         export FILE_WATCH_INTERVAL="15"
         export FILE_WATCH_DEBOUNCE="5"
-        echo "🔧 開発モード(LOG_LEVEL=DEBUG, 初回同期スキップ, ファイル監視有効)でサーバーを起動します..."
+        echo "🔧 開発モード(LOG_LEVEL=DEBUG, 初回同期スキップ, ファイル監視デフォルト有効)でサーバーを起動します..."
         ;;
     prod)
         export LOG_LEVEL="INFO"
-        export ENABLE_FILE_WATCH="true"
         export FILE_WATCH_INTERVAL="15"
         export FILE_WATCH_DEBOUNCE="5"
-        echo "🔧 本番モード(LOG_LEVEL=INFO, ファイル監視有効)でサーバーを起動します..."
+        echo "🔧 本番モード(LOG_LEVEL=INFO, ファイル監視デフォルト有効)でサーバーを起動します..."
         ;;
     *)
         echo "❌ 不正なモード: $MODE (dev または prod を指定してください)"

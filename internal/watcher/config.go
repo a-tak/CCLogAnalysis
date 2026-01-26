@@ -24,8 +24,9 @@ const (
 )
 
 // LoadWatcherConfig loads watcher configuration from environment variables
+// File watching is enabled by default unless ENABLE_FILE_WATCH=false is explicitly set
 func LoadWatcherConfig() WatcherConfig {
-	enabled := os.Getenv("ENABLE_FILE_WATCH") == "true"
+	enabled := os.Getenv("ENABLE_FILE_WATCH") != "false"
 
 	interval := parseEnvDuration("FILE_WATCH_INTERVAL", defaultInterval, minInterval, maxInterval)
 	debounce := parseEnvDuration("FILE_WATCH_DEBOUNCE", defaultDebounce, minDebounce, maxDebounce)
