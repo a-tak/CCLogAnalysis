@@ -3,11 +3,11 @@ import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 import type { ProjectGroupDetail, ProjectGroupStats, TimeSeriesResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { ArrowLeft, Folder, Activity, Zap, TrendingUp, AlertCircle, GitBranch } from 'lucide-react'
+import { Folder, Activity, Zap, TrendingUp, AlertCircle, GitBranch } from 'lucide-react'
+import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -60,14 +60,7 @@ export default function GroupDetailPage() {
   if (error || !group || !stats) {
     return (
       <div className="container mx-auto py-8">
-        <div className="flex items-center gap-4 mb-6">
-          <Button asChild variant="ghost" size="sm">
-            <Link to="/projects">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              プロジェクト一覧に戻る
-            </Link>
-          </Button>
-        </div>
+        <Breadcrumb items={[{ label: 'エラー' }]} />
         <Card className="border-destructive">
           <CardHeader>
             <CardTitle className="text-destructive">エラー</CardTitle>
@@ -93,15 +86,8 @@ export default function GroupDetailPage() {
 
   return (
     <div className="container mx-auto py-8">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-6">
-        <Button asChild variant="ghost" size="sm">
-          <Link to="/projects">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            プロジェクト一覧に戻る
-          </Link>
-        </Button>
-      </div>
+      {/* Breadcrumb */}
+      <Breadcrumb items={[{ label: group.name }]} />
 
       {/* Group Info */}
       <Card className="mb-6">

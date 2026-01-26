@@ -7,6 +7,7 @@ import type { SessionDetail } from '@/lib/api/types'
 import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
 import { ModelUsageChart } from '@/components/charts/ModelUsageChart'
 import { ConversationHistory } from '@/components/conversation/ConversationHistory'
+import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString)
@@ -42,12 +43,30 @@ export function SessionDetailPage() {
     loadSessionDetail()
   }, [projectName, sessionId])
 
+  // Helper to build breadcrumb items
+  const buildBreadcrumbItems = (sessionData?: SessionDetail | null) => {
+    const items = []
+    if (projectName) {
+      items.push({
+        label: projectName,
+        href: `/projects/${encodeURIComponent(projectName)}`,
+      })
+    }
+    if (sessionData) {
+      items.push({ label: `セッション ${sessionData.id.substring(0, 8)}...` })
+    } else if (sessionId) {
+      items.push({ label: `セッション ${sessionId.substring(0, 8)}...` })
+    }
+    return items
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
+        <Breadcrumb items={buildBreadcrumbItems()} />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Session Detail</h1>
-          <p className="text-muted-foreground">Loading...</p>
+          <h1 className="text-3xl font-bold tracking-tight">セッション詳細</h1>
+          <p className="text-muted-foreground">読み込み中...</p>
         </div>
       </div>
     )
@@ -56,8 +75,9 @@ export function SessionDetailPage() {
   if (error) {
     return (
       <div className="space-y-4">
+        <Breadcrumb items={buildBreadcrumbItems()} />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Session Detail</h1>
+          <h1 className="text-3xl font-bold tracking-tight">セッション詳細</h1>
           <p className="text-destructive">{error}</p>
         </div>
       </div>
@@ -67,9 +87,10 @@ export function SessionDetailPage() {
   if (!session) {
     return (
       <div className="space-y-4">
+        <Breadcrumb items={buildBreadcrumbItems()} />
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Session Detail</h1>
-          <p className="text-muted-foreground">Session not found</p>
+          <h1 className="text-3xl font-bold tracking-tight">セッション詳細</h1>
+          <p className="text-muted-foreground">セッションが見つかりません</p>
         </div>
       </div>
     )
@@ -77,8 +98,9 @@ export function SessionDetailPage() {
 
   return (
     <div className="space-y-4">
+      <Breadcrumb items={buildBreadcrumbItems(session)} />
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Session Detail</h1>
+        <h1 className="text-3xl font-bold tracking-tight">セッション詳細</h1>
         <p className="text-muted-foreground">
           {session.projectPath} ({session.gitBranch})
         </p>
