@@ -3,8 +3,9 @@ model: claude-sonnet-4-5
 name: issue
 description: 現在のブランチ名からissue番号を抽出し、GitHubのissue情報を分析してプラン立案します
 allowed-tools:
-  - Bash(gh:*)
-  - Bash(git:*)
+  - Bash(gh auth:*)
+  - Bash(gh issue:*)
+  - Bash(git branch:*)
   - EnterPlanMode
 argument-hint: "[issue-number]"
 ---
