@@ -472,3 +472,210 @@ func (db *DB) CountSessions(projectID int64) (int, error) {
 
 	return count, nil
 }
+
+// UpdateSession updates an existing session with new data
+func (db *DB) UpdateSession(session *parser.Session, projectName string, fileModTime time.Time) error {
+	// トランザクション開始
+	tx, err := db.conn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // エラー時は自動ロールバック
+
+	// プロジェクトIDを取得
+	var projectID int64
+	err = tx.QueryRow("SELECT id FROM projects WHERE name = ?", projectName).Scan(&projectID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("project not found: %s", projectName)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get project ID: %w", err)
+	}
+
+	// セッションが存在するか確認
+	var existingID string
+	err = tx.QueryRow("SELECT id FROM sessions WHERE id = ?", session.ID).Scan(&existingID)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("session not found: %s", session.ID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check session existence: %w", err)
+	}
+
+	// First user messageを計算
+	firstUserMessage := calculateFirstUserMessage(session)
+
+	// セッション更新
+	durationSeconds := int(session.EndTime.Sub(session.StartTime).Seconds())
+	sessionQuery := `
+		UPDATE sessions SET
+			git_branch = ?,
+			end_time = ?,
+			duration_seconds = ?,
+			total_input_tokens = ?,
+			total_output_tokens = ?,
+			total_cache_creation_tokens = ?,
+			total_cache_read_tokens = ?,
+			error_count = ?,
+			first_user_message = ?,
+			file_mod_time = ?,
+			updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+	`
+	_, err = tx.Exec(sessionQuery,
+		session.GitBranch,
+		session.EndTime.Format(time.RFC3339Nano),
+		durationSeconds,
+		session.TotalTokens.InputTokens,
+		session.TotalTokens.OutputTokens,
+		session.TotalTokens.CacheCreationInputTokens,
+		session.TotalTokens.CacheReadInputTokens,
+		session.ErrorCount,
+		firstUserMessage,
+		fileModTime.Format(time.RFC3339),
+		session.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update session: %w", err)
+	}
+
+	// 既存のモデル使用量を削除
+	_, err = tx.Exec("DELETE FROM model_usage WHERE session_id = ?", session.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete old model usage: %w", err)
+	}
+
+	// 既存のログエントリとメッセージを削除
+	_, err = tx.Exec("DELETE FROM log_entries WHERE session_id = ?", session.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete old log entries: %w", err)
+	}
+
+	// 既存のツール呼び出しを削除
+	_, err = tx.Exec("DELETE FROM tool_calls WHERE session_id = ?", session.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete old tool calls: %w", err)
+	}
+
+	// モデル使用量挿入
+	modelUsageQuery := `
+		INSERT INTO model_usage (
+			session_id, model, input_tokens, output_tokens,
+			cache_creation_tokens, cache_read_tokens
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`
+	modelStmt, err := tx.Prepare(modelUsageQuery)
+	if err != nil {
+		return fmt.Errorf("failed to prepare model usage statement: %w", err)
+	}
+	defer modelStmt.Close()
+
+	for model, tokens := range session.ModelUsage {
+		_, err = modelStmt.Exec(
+			session.ID, model,
+			tokens.InputTokens, tokens.OutputTokens,
+			tokens.CacheCreationInputTokens, tokens.CacheReadInputTokens,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert model usage for %s: %w", model, err)
+		}
+	}
+
+	// ログエントリ挿入
+	logEntryQuery := `
+		INSERT INTO log_entries (
+			session_id, uuid, parent_uuid, entry_type, timestamp,
+			cwd, version, request_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	logStmt, err := tx.Prepare(logEntryQuery)
+	if err != nil {
+		return fmt.Errorf("failed to prepare log entry statement: %w", err)
+	}
+	defer logStmt.Close()
+
+	messageQuery := `
+		INSERT INTO messages (
+			log_entry_id, model, role, content_text, content_json
+		) VALUES (?, ?, ?, ?, ?)
+	`
+	msgStmt, err := tx.Prepare(messageQuery)
+	if err != nil {
+		return fmt.Errorf("failed to prepare message statement: %w", err)
+	}
+	defer msgStmt.Close()
+
+	for _, entry := range session.Entries {
+		// UUID が空のエントリはスキップ
+		if entry.UUID == "" {
+			continue
+		}
+
+		result, err := logStmt.Exec(
+			session.ID, entry.UUID, entry.ParentUUID, entry.Type, entry.Timestamp,
+			entry.Cwd, entry.Version, entry.RequestID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert log entry %s: %w", entry.UUID, err)
+		}
+
+		// メッセージがあれば挿入
+		if entry.Message != nil {
+			logEntryID, err := result.LastInsertId()
+			if err != nil {
+				return fmt.Errorf("failed to get log entry ID: %w", err)
+			}
+
+			// Content配列をJSONにシリアライズ
+			contentJSON, err := json.Marshal(entry.Message.Content)
+			if err != nil {
+				return fmt.Errorf("failed to marshal message content: %w", err)
+			}
+
+			// テキストコンテンツを抽出
+			contentText := extractTextFromContent(entry.Message.Content)
+
+			_, err = msgStmt.Exec(
+				logEntryID, entry.Message.Model, entry.Message.Role,
+				contentText, string(contentJSON),
+			)
+			if err != nil {
+				return fmt.Errorf("failed to insert message for entry %s: %w", entry.UUID, err)
+			}
+		}
+	}
+
+	// ツール呼び出し挿入
+	toolCallQuery := `
+		INSERT INTO tool_calls (
+			session_id, timestamp, tool_name, input_json, is_error, result_text
+		) VALUES (?, ?, ?, ?, ?, ?)
+	`
+	toolStmt, err := tx.Prepare(toolCallQuery)
+	if err != nil {
+		return fmt.Errorf("failed to prepare tool call statement: %w", err)
+	}
+	defer toolStmt.Close()
+
+	for _, toolCall := range session.ToolCalls {
+		inputJSON, err := json.Marshal(toolCall.Input)
+		if err != nil {
+			return fmt.Errorf("failed to marshal tool input: %w", err)
+		}
+
+		_, err = toolStmt.Exec(
+			session.ID, toolCall.Timestamp, toolCall.Name,
+			string(inputJSON), toolCall.IsError, toolCall.Result,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert tool call %s: %w", toolCall.Name, err)
+		}
+	}
+
+	// コミット
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}

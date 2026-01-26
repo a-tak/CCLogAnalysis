@@ -14,8 +14,8 @@ func TestLoadWatcherConfig_Defaults(t *testing.T) {
 
 	config := LoadWatcherConfig()
 
-	if config.Enabled {
-		t.Errorf("Expected Enabled to be false by default, got true")
+	if !config.Enabled {
+		t.Errorf("Expected Enabled to be true by default, got false")
 	}
 	if config.Interval != 15*time.Second {
 		t.Errorf("Expected Interval to be 15s, got %v", config.Interval)
@@ -33,6 +33,17 @@ func TestLoadWatcherConfig_Enabled(t *testing.T) {
 
 	if !config.Enabled {
 		t.Errorf("Expected Enabled to be true, got false")
+	}
+}
+
+func TestLoadWatcherConfig_ExplicitlyDisabled(t *testing.T) {
+	os.Setenv("ENABLE_FILE_WATCH", "false")
+	defer os.Unsetenv("ENABLE_FILE_WATCH")
+
+	config := LoadWatcherConfig()
+
+	if config.Enabled {
+		t.Errorf("Expected Enabled to be false when explicitly set to 'false', got true")
 	}
 }
 

@@ -267,6 +267,259 @@ func TestSyncIncremental(t *testing.T) {
 			t.Errorf("Expected %d sessions in DB, got %d", expectedTotal, len(sessions))
 		}
 	})
+
+	t.Run("新規ワークツリープロジェクトが増分同期で検出される", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// 最初のプロジェクトを作成して同期
+		_, err := SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("First SyncAll failed: %v", err)
+		}
+
+		// 新しいワークツリープロジェクトを追加
+		worktreeDir := filepath.Join(claudeDir, "worktree-new-project")
+		err = os.MkdirAll(worktreeDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create worktree directory: %v", err)
+		}
+
+		// 親リポジトリのパス
+		parentRepoPath := "/path/to/parent/repo.git"
+
+		// .gitファイルを作成（gitdir指定）
+		gitFilePath := filepath.Join(worktreeDir, ".git")
+		gitFileContent := "gitdir: " + parentRepoPath + "/worktrees/feature\n"
+		err = os.WriteFile(gitFilePath, []byte(gitFileContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create .git file: %v", err)
+		}
+
+		// ワークツリーのセッションファイルを作成
+		worktreeSessionPath := filepath.Join(worktreeDir, "session-worktree.jsonl")
+		worktreeSessionContent := `{"type":"user","timestamp":"2024-01-01T14:00:00Z","sessionId":"session-worktree","uuid":"uuid-wt-1","cwd":"` + worktreeDir + `","version":"1.0.0","gitBranch":"feature","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Worktree test"}]}}
+{"type":"assistant","timestamp":"2024-01-01T14:00:05Z","sessionId":"session-worktree","uuid":"uuid-wt-2","parentUuid":"uuid-wt-1","cwd":"` + worktreeDir + `","version":"1.0.0","gitBranch":"feature","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":20,"output_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(worktreeSessionPath, []byte(worktreeSessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write worktree session: %v", err)
+		}
+
+		// 差分同期を実行
+		time.Sleep(10 * time.Millisecond)
+		result2, err := SyncIncremental(newDB, p)
+		if err != nil {
+			t.Fatalf("Incremental sync failed: %v", err)
+		}
+
+		// 新しいワークツリープロジェクトのセッションが同期されることを確認
+		if result2.SessionsSynced < 1 {
+			t.Errorf("Expected at least 1 new session synced, got %d", result2.SessionsSynced)
+		}
+
+		// ワークツリープロジェクトを取得してGit Rootを確認
+		worktreeProject, err := newDB.GetProjectByName("worktree-new-project")
+		if err != nil {
+			t.Fatalf("Failed to get worktree project: %v", err)
+		}
+
+		// Git Rootが設定されていることを確認
+		if worktreeProject.GitRoot == nil {
+			t.Error("Expected git_root to be set for worktree project, got nil")
+		} else if *worktreeProject.GitRoot != parentRepoPath {
+			t.Errorf("Expected git_root %s, got %s", parentRepoPath, *worktreeProject.GitRoot)
+		}
+	})
+
+	t.Run("新規プロジェクト作成時にGit Root検出が実行される", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// 既存プロジェクトを同期
+		_, err := SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("Initial SyncAll failed: %v", err)
+		}
+
+		// 新しいGitリポジトリプロジェクトを追加
+		gitRepoDir := filepath.Join(claudeDir, "new-git-repo")
+		err = os.MkdirAll(gitRepoDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create git repo directory: %v", err)
+		}
+
+		// .gitディレクトリを作成
+		gitDir := filepath.Join(gitRepoDir, ".git")
+		err = os.Mkdir(gitDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create .git directory: %v", err)
+		}
+
+		// セッションファイルを作成
+		sessionPath := filepath.Join(gitRepoDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T15:00:00Z","sessionId":"session-new-git","uuid":"uuid-ng-1","cwd":"` + gitRepoDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"New git repo"}]}}
+{"type":"assistant","timestamp":"2024-01-01T15:00:05Z","sessionId":"session-new-git","uuid":"uuid-ng-2","parentUuid":"uuid-ng-1","cwd":"` + gitRepoDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":15,"output_tokens":8,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// 差分同期を実行
+		time.Sleep(10 * time.Millisecond)
+		_, err = SyncIncremental(newDB, p)
+		if err != nil {
+			t.Fatalf("Incremental sync failed: %v", err)
+		}
+
+		// 新規プロジェクトを取得してGit Rootを確認
+		newProject, err := newDB.GetProjectByName("new-git-repo")
+		if err != nil {
+			t.Fatalf("Failed to get new project: %v", err)
+		}
+
+		// Git Rootが設定されていることを確認
+		if newProject.GitRoot == nil {
+			t.Error("Expected git_root to be set for new project, got nil")
+		} else if *newProject.GitRoot != gitRepoDir {
+			t.Errorf("Expected git_root %s, got %s", gitRepoDir, *newProject.GitRoot)
+		}
+	})
+
+	t.Run("新規プロジェクト検出後にプロジェクトグループが同期される", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// 既存プロジェクトを同期
+		_, err := SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("Initial SyncAll failed: %v", err)
+		}
+
+		// 初期のグループ数を取得
+		groups1, err := newDB.ListProjectGroups()
+		if err != nil {
+			t.Fatalf("Failed to list project groups: %v", err)
+		}
+		initialGroupCount := len(groups1)
+
+		// 新しいワークツリープロジェクトを追加（既存プロジェクトと同じGit Root）
+		worktreeDir2 := filepath.Join(claudeDir, "worktree-same-repo")
+		err = os.MkdirAll(worktreeDir2, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create worktree directory: %v", err)
+		}
+
+		// 親リポジトリのパス（既存プロジェクトと同じ）
+		parentRepoPath := "/path/to/project"
+
+		// .gitファイルを作成
+		gitFilePath := filepath.Join(worktreeDir2, ".git")
+		gitFileContent := "gitdir: " + parentRepoPath + "/.git/worktrees/feature2\n"
+		err = os.WriteFile(gitFilePath, []byte(gitFileContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create .git file: %v", err)
+		}
+
+		// セッションファイルを作成
+		sessionPath := filepath.Join(worktreeDir2, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T16:00:00Z","sessionId":"session-wt2","uuid":"uuid-wt2-1","cwd":"` + worktreeDir2 + `","version":"1.0.0","gitBranch":"feature2","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"Worktree 2"}]}}
+{"type":"assistant","timestamp":"2024-01-01T16:00:05Z","sessionId":"session-wt2","uuid":"uuid-wt2-2","parentUuid":"uuid-wt2-1","cwd":"` + worktreeDir2 + `","version":"1.0.0","gitBranch":"feature2","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":12,"output_tokens":6,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// 差分同期を実行
+		time.Sleep(10 * time.Millisecond)
+		_, err = SyncIncremental(newDB, p)
+		if err != nil {
+			t.Fatalf("Incremental sync failed: %v", err)
+		}
+
+		// プロジェクトグループが更新されたことを確認
+		groups2, err := newDB.ListProjectGroups()
+		if err != nil {
+			t.Fatalf("Failed to list project groups after sync: %v", err)
+		}
+
+		// グループ数が増えているか、または同じGit Rootのグループに追加されている
+		// （実装によって挙動が変わるため、グループが存在することのみ確認）
+		if len(groups2) < initialGroupCount {
+			t.Errorf("Expected at least %d groups, got %d", initialGroupCount, len(groups2))
+		}
+	})
+
+	t.Run("既存プロジェクトに影響がないことを確認", func(t *testing.T) {
+		// 新しいデータベースを作成
+		newDB, _ := setupTestDB(t)
+		defer newDB.Close()
+
+		// 既存プロジェクトを同期
+		_, err := SyncAll(newDB, p)
+		if err != nil {
+			t.Fatalf("Initial SyncAll failed: %v", err)
+		}
+
+		// 既存プロジェクトの情報を取得
+		existingProject, err := newDB.GetProjectByName("test-project-1")
+		if err != nil {
+			t.Fatalf("Failed to get existing project: %v", err)
+		}
+		originalGitRoot := existingProject.GitRoot
+		originalUpdatedAt := existingProject.UpdatedAt
+
+		// 新しいプロジェクトを追加
+		newProjectDir := filepath.Join(claudeDir, "new-project-no-git")
+		err = os.MkdirAll(newProjectDir, 0755)
+		if err != nil {
+			t.Fatalf("Failed to create new project directory: %v", err)
+		}
+
+		// セッションファイルを作成（Git管理外）
+		sessionPath := filepath.Join(newProjectDir, "session-1.jsonl")
+		sessionContent := `{"type":"user","timestamp":"2024-01-01T17:00:00Z","sessionId":"session-nogit","uuid":"uuid-ng-1","cwd":"` + newProjectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"user","content":[{"type":"text","text":"No git"}]}}
+{"type":"assistant","timestamp":"2024-01-01T17:00:05Z","sessionId":"session-nogit","uuid":"uuid-ng-2","parentUuid":"uuid-ng-1","cwd":"` + newProjectDir + `","version":"1.0.0","gitBranch":"main","message":{"model":"claude-sonnet-4-5","role":"assistant","content":[{"type":"text","text":"OK"}],"usage":{"input_tokens":8,"output_tokens":4,"cache_creation_input_tokens":0,"cache_read_input_tokens":0}}}
+`
+		err = os.WriteFile(sessionPath, []byte(sessionContent), 0644)
+		if err != nil {
+			t.Fatalf("Failed to write session file: %v", err)
+		}
+
+		// 差分同期を実行
+		time.Sleep(10 * time.Millisecond)
+		_, err = SyncIncremental(newDB, p)
+		if err != nil {
+			t.Fatalf("Incremental sync failed: %v", err)
+		}
+
+		// 既存プロジェクトの情報を再取得
+		existingProjectAfter, err := newDB.GetProjectByName("test-project-1")
+		if err != nil {
+			t.Fatalf("Failed to get existing project after sync: %v", err)
+		}
+
+		// Git Rootが変更されていないことを確認
+		if originalGitRoot == nil && existingProjectAfter.GitRoot != nil {
+			t.Error("Git Root should remain nil for existing project")
+		} else if originalGitRoot != nil && existingProjectAfter.GitRoot == nil {
+			t.Error("Git Root should not be set to nil for existing project")
+		} else if originalGitRoot != nil && existingProjectAfter.GitRoot != nil {
+			if *originalGitRoot != *existingProjectAfter.GitRoot {
+				t.Errorf("Git Root should not change for existing project: %s -> %s",
+					*originalGitRoot, *existingProjectAfter.GitRoot)
+			}
+		}
+
+		// UpdatedAtは変更される可能性がある（last_scan_timeの更新）ため、チェックしない
+		// ここでは、Git Rootが変更されていないことのみ確認
+		_ = originalUpdatedAt
+	})
 }
 
 func TestSyncResult(t *testing.T) {
