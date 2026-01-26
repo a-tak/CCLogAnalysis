@@ -428,11 +428,28 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 			err = database.CreateSession(session, projectName, info.ModTime)
 			if err != nil {
 				if isUniqueConstraintError(err) {
-					result.SessionsSkipped++
-					log.DebugWithContext("Session already exists (skipped)", map[string]interface{}{
+					// セッションが既に存在する場合は更新
+					log.DebugWithContext("Session already exists, updating", map[string]interface{}{
 						"project":    projectName,
 						"session_id": info.SessionID,
 					})
+
+					err = database.UpdateSession(session, projectName, info.ModTime)
+					if err != nil {
+						log.ErrorWithContext("Failed to update session", map[string]interface{}{
+							"project":    projectName,
+							"session_id": info.SessionID,
+							"error":      err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+
+					log.InfoWithContext("Session updated", map[string]interface{}{
+						"project":    projectName,
+						"session_id": info.SessionID,
+					})
+					result.SessionsSynced++
 					continue
 				}
 				log.ErrorWithContext("Failed to save session", map[string]interface{}{
