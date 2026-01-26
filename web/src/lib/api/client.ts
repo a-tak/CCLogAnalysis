@@ -11,6 +11,7 @@ import type {
   ProjectGroupDetail,
   ProjectGroupStats,
   ScanStatus,
+  TotalStats,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
@@ -149,6 +150,21 @@ export const api = {
   // Get scan status
   async getScanStatus(): Promise<ScanStatus> {
     return fetchApi<ScanStatus>('/scan/status')
+  },
+
+  // Get total statistics (all projects combined)
+  async getTotalStats(): Promise<TotalStats> {
+    return fetchApi<TotalStats>('/stats/total')
+  },
+
+  // Get total timeline (all projects combined)
+  async getTotalTimeline(
+    period: 'day' | 'week' | 'month' = 'day',
+    limit = 30
+  ): Promise<TimeSeriesResponse> {
+    return fetchApi<TimeSeriesResponse>(
+      `/stats/timeline?period=${period}&limit=${limit}`
+    )
   },
 }
 

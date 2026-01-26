@@ -191,3 +191,19 @@ export interface ScanStatus {
   completedAt?: string
   lastError?: string
 }
+
+// Total Statistics (all projects combined)
+export interface TotalStats {
+  totalGroups: number
+  totalProjects: number
+  totalSessions: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+  avgTokens: number
+  firstSession: string
+  lastSession: string
+  errorRate: number
+}
