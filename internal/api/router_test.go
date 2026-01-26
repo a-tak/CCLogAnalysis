@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -240,7 +241,7 @@ func TestGetSessionHandler(t *testing.T) {
 		session: &SessionDetailResponse{
 			ID:          "session-001",
 			ProjectName: "project-1",
-			ProjectPath: "/Users/user/projects/my-project",
+			ProjectPath: "{project-path}/my-project",
 			GitBranch:   "main",
 			StartTime:   startTime,
 			EndTime:     endTime,
@@ -335,50 +336,73 @@ func TestAnalyzeHandler(t *testing.T) {
 }
 
 func TestGetTotalStatsHandler(t *testing.T) {
-	mockService := &MockSessionService{
-		TotalStats: &TotalStatsResponse{
-			TotalGroups:              2,
-			TotalProjects:            5,
-			TotalSessions:            50,
-			TotalInputTokens:         30000,
-			TotalOutputTokens:        20000,
-			TotalCacheCreationTokens: 5000,
-			TotalCacheReadTokens:     1000,
-			TotalTokens:              50000,
-			AvgTokens:                1000,
-			FirstSession:             time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-			LastSession:              time.Date(2026, 1, 26, 0, 0, 0, 0, time.UTC),
-			ErrorRate:                0.05,
-		},
-	}
+	t.Run("正常系：総統計情報", func(t *testing.T) {
+		mockService := &MockSessionService{
+			TotalStats: &TotalStatsResponse{
+				TotalGroups:              2,
+				TotalProjects:            5,
+				TotalSessions:            50,
+				TotalInputTokens:         30000,
+				TotalOutputTokens:        20000,
+				TotalCacheCreationTokens: 5000,
+				TotalCacheReadTokens:     1000,
+				TotalTokens:              50000,
+				AvgTokens:                1000,
+				FirstSession:             time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+				LastSession:              time.Date(2026, 1, 26, 0, 0, 0, 0, time.UTC),
+				ErrorRate:                0.05,
+			},
+		}
 
-	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
-	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
-	handler := NewHandler(mockService, mockScanManager)
-	router := handler.Routes()
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
 
-	req := httptest.NewRequest("GET", "/api/stats/total", nil)
-	w := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/api/stats/total", nil)
+		w := httptest.NewRecorder()
 
-	router.ServeHTTP(w, req)
+		router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
 
-	var resp TotalStatsResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
+		var resp TotalStatsResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
 
-	if resp.TotalGroups != 2 {
-		t.Errorf("Expected 2 groups, got %d", resp.TotalGroups)
-	}
+		if resp.TotalGroups != 2 {
+			t.Errorf("Expected 2 groups, got %d", resp.TotalGroups)
+		}
 
-	if resp.TotalTokens != 50000 {
-		t.Errorf("Expected 50000 total tokens, got %d", resp.TotalTokens)
-	}
+		if resp.TotalTokens != 50000 {
+			t.Errorf("Expected 50000 total tokens, got %d", resp.TotalTokens)
+		}
+	})
+
+	t.Run("エラー系：サービスエラー", func(t *testing.T) {
+		mockService := &MockSessionService{
+			err: errors.New("database error"),
+		}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/total", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500, got %d", w.Code)
+		}
+	})
 }
 
 func TestGetTotalTimelineHandler(t *testing.T) {
@@ -438,6 +462,46 @@ func TestGetTotalTimelineHandler(t *testing.T) {
 		router := handler.Routes()
 
 		req := httptest.NewRequest("GET", "/api/stats/timeline?period=invalid", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("エラー系：サービスエラー", func(t *testing.T) {
+		mockService := &MockSessionService{
+			err: errors.New("database error"),
+		}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/timeline?period=day&limit=10", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500, got %d", w.Code)
+		}
+	})
+
+	t.Run("エラー系：limitパラメータ0", func(t *testing.T) {
+		mockService := &MockSessionService{}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/timeline?period=day&limit=0", nil)
 		w := httptest.NewRecorder()
 
 		router.ServeHTTP(w, req)
@@ -513,6 +577,46 @@ func TestGetDailyStatsHandler(t *testing.T) {
 
 		if w.Code != http.StatusNotFound {
 			t.Errorf("Expected status 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("エラー系：サービスエラー", func(t *testing.T) {
+		mockService := &MockSessionService{
+			err: errors.New("database error"),
+		}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/daily/2026-01-26", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusInternalServerError {
+			t.Errorf("Expected status 500, got %d", w.Code)
+		}
+	})
+
+	t.Run("エラー系：無効な日付形式", func(t *testing.T) {
+		mockService := &MockSessionService{}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/daily/invalid-date", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
 		}
 	})
 }

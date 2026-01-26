@@ -3,7 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"regexp"
 	"strconv"
+	"time"
 )
 
 // getTotalStatsHandler returns total statistics across all projects
@@ -15,7 +17,7 @@ func (h *Handler) getTotalStatsHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{
 			Error:   "internal_error",
-			Message: err.Error(),
+			Message: "Failed to retrieve statistics",
 		})
 		return
 	}
@@ -62,12 +64,24 @@ func (h *Handler) getTotalTimelineHandler(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{
 			Error:   "internal_error",
-			Message: err.Error(),
+			Message: "Failed to retrieve timeline data",
 		})
 		return
 	}
 
 	json.NewEncoder(w).Encode(timeline)
+}
+
+// isValidDateFormat validates if the date string is in YYYY-MM-DD format
+func isValidDateFormat(dateStr string) bool {
+	// Check format with regex
+	pattern := regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+	if !pattern.MatchString(dateStr) {
+		return false
+	}
+	// Verify it's a valid date
+	_, err := time.Parse("2006-01-02", dateStr)
+	return err == nil
 }
 
 // getDailyStatsHandler returns group-wise statistics for a specific date
@@ -84,12 +98,22 @@ func (h *Handler) getDailyStatsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate date format
+	if !isValidDateFormat(date) {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "date must be in YYYY-MM-DD format",
+		})
+		return
+	}
+
 	stats, err := h.service.GetDailyStats(date)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		json.NewEncoder(w).Encode(ErrorResponse{
 			Error:   "internal_error",
-			Message: err.Error(),
+			Message: "Failed to retrieve daily statistics",
 		})
 		return
 	}

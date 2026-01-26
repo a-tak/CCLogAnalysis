@@ -68,14 +68,21 @@ func (db *DB) GetTotalStats() (*TotalStats, error) {
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse first session time: %w", err)
 			}
+		} else {
+			// セッションが存在するがfirst_sessionがNULLの場合は異常
+			return nil, fmt.Errorf("sessions exist but first_session is null: data integrity issue")
 		}
 		if lastSessionStr.Valid {
 			stats.LastSession, err = parseDateTime(lastSessionStr.String)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse last session time: %w", err)
 			}
+		} else {
+			// セッションが存在するがlast_sessionがNULLの場合は異常
+			return nil, fmt.Errorf("sessions exist but last_session is null: data integrity issue")
 		}
 	}
+	// セッションが0件の場合、FirstSessionとLastSessionはゼロ値のままで問題なし
 	if errorRate.Valid {
 		stats.ErrorRate = errorRate.Float64
 	}

@@ -5,6 +5,7 @@ import type { ProjectGroupDetail, ProjectGroupStats, TimeSeriesResponse } from '
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Folder, Activity, Zap, TrendingUp, AlertCircle, GitBranch } from 'lucide-react'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
@@ -50,8 +51,8 @@ export default function GroupDetailPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">読み込み中...</p>
+          <LoadingSpinner />
+          <p className="text-muted-foreground mt-4">読み込み中...</p>
         </div>
       </div>
     )
