@@ -44,9 +44,15 @@ sync_main_branch_with_remote() {
 
   # リモートの最新情報を取得
   echo "🔄 リモートの最新情報を取得中..."
-  if ! git -C "$MAIN_REPO_ROOT" fetch origin &> /dev/null; then
+  FETCH_OUTPUT=$(git -C "$MAIN_REPO_ROOT" fetch origin 2>&1)
+  FETCH_EXIT_CODE=$?
+
+  if [ $FETCH_EXIT_CODE -ne 0 ]; then
     echo "⚠️  警告: リモートの最新情報取得に失敗しました"
     echo "   ネットワーク接続を確認してください"
+    echo ""
+    echo "エラー詳細:"
+    echo "$FETCH_OUTPUT"
     echo ""
     echo "処理を続行しますか？ (古いメインブランチから作成される可能性があります)"
     read -p "続行する場合は 'y' を入力: " CONFIRM
@@ -56,12 +62,19 @@ sync_main_branch_with_remote() {
     echo ""
     return 0  # ユーザーが続行を選択した場合は処理を継続
   fi
+
   echo "✅ リモート情報取得完了"
   echo ""
 
   # ローカルとリモートのコミットハッシュを取得
   local LOCAL_HASH=$(git -C "$MAIN_REPO_ROOT" rev-parse $MAIN_BRANCH)
   local REMOTE_HASH=$(git -C "$MAIN_REPO_ROOT" rev-parse origin/$MAIN_BRANCH)
+
+  # デバッグ: ハッシュを表示
+  echo "🔍 ブランチの状態:"
+  echo "   ローカル: ${LOCAL_HASH:0:8}"
+  echo "   リモート: ${REMOTE_HASH:0:8}"
+  echo ""
 
   # 差分チェック
   if [ "$LOCAL_HASH" = "$REMOTE_HASH" ]; then
