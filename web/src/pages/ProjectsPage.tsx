@@ -35,8 +35,6 @@ export function ProjectsPage() {
           api.getTotalStats(),
           api.getTotalTimeline(period, 30),
         ])
-        console.log('Fetched projects:', projectsRes.projects.length, 'projects')
-        console.log('Fetched groups:', groupsRes.groups.length, 'groups')
         setProjects(projectsRes.projects)
         setGroups(groupsRes.groups)
         setTotalStats(statsRes)
@@ -93,7 +91,6 @@ export function ProjectsPage() {
 
   // Handle date badge click
   const handleDateClick = (dateStr: string) => {
-    console.log('Date clicked:', dateStr)
     setSelectedDate(dateStr)
   }
 
