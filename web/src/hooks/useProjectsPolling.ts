@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { api, ApiError } from '@/lib/api/client'
 import type {
   Project,
@@ -33,7 +33,7 @@ export function useProjectsPolling(
   const [timeline, setTimeline] = useState<TimeSeriesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const isInitialLoadRef = useRef(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -51,8 +51,9 @@ export function useProjectsPolling(
       setTotalStats(statsRes)
       setTimeline(timelineRes)
 
-      if (isInitialLoad) {
-        setIsInitialLoad(false)
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false
+        setLoading(false)
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -63,15 +64,12 @@ export function useProjectsPolling(
         setError('Failed to load data')
       }
 
-      if (isInitialLoad) {
-        setIsInitialLoad(false)
-      }
-    } finally {
-      if (isInitialLoad) {
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false
         setLoading(false)
       }
     }
-  }, [period, isInitialLoad])
+  }, [period])
 
   // 15秒ごとにポーリング
   usePolling(fetchData, 15000, true)

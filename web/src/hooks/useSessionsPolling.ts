@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { api, ApiError } from '@/lib/api/client'
 import type { SessionSummary } from '@/lib/api/types'
 import { usePolling } from './usePolling'
@@ -20,7 +20,7 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const isInitialLoadRef = useRef(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -29,8 +29,9 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
       const response = await api.getSessions(projectName)
       setSessions(response.sessions)
 
-      if (isInitialLoad) {
-        setIsInitialLoad(false)
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false
+        setLoading(false)
       }
     } catch (err) {
       if (err instanceof ApiError) {
@@ -41,15 +42,12 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
         setError('Failed to load sessions')
       }
 
-      if (isInitialLoad) {
-        setIsInitialLoad(false)
-      }
-    } finally {
-      if (isInitialLoad) {
+      if (isInitialLoadRef.current) {
+        isInitialLoadRef.current = false
         setLoading(false)
       }
     }
-  }, [projectName, isInitialLoad])
+  }, [projectName])
 
   // 15秒ごとにポーリング
   usePolling(fetchData, 15000, true)

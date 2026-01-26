@@ -26,18 +26,24 @@ describe('useSessionsPolling', () => {
   const mockSessionsResponse = {
     sessions: [
       {
-        sessionId: 'session-1',
+        id: 'session-1',
         projectName: 'TestProject',
-        firstMessage: 'Test message',
-        branch: 'main',
+        firstUserMessage: 'Test message',
+        gitBranch: 'main',
         startTime: '2026-01-26T00:00:00Z',
+        endTime: '2026-01-26T00:30:00Z',
+        totalTokens: 5000,
+        errorCount: 0,
       },
       {
-        sessionId: 'session-2',
+        id: 'session-2',
         projectName: 'TestProject',
-        firstMessage: 'Another message',
-        branch: 'develop',
+        firstUserMessage: 'Another message',
+        gitBranch: 'develop',
         startTime: '2026-01-26T01:00:00Z',
+        endTime: '2026-01-26T01:30:00Z',
+        totalTokens: 6000,
+        errorCount: 1,
       },
     ],
   }
