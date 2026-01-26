@@ -24,6 +24,9 @@ type MockSessionService struct {
 	ProjectGroupDetail   *ProjectGroupDetailResponse
 	ProjectGroupStats    *ProjectGroupStatsResponse
 	ProjectGroupTimeline *TimeSeriesResponse
+	TotalStats           *TotalStatsResponse
+	TotalTimeline        *TimeSeriesResponse
+	DailyStats           *DailyStatsResponse
 	ShouldError          bool
 	err                  error
 }
@@ -96,6 +99,27 @@ func (m *MockSessionService) GetProjectGroupTimeline(groupID int64, period strin
 		return nil, m.err
 	}
 	return m.ProjectGroupTimeline, nil
+}
+
+func (m *MockSessionService) GetTotalStats() (*TotalStatsResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.TotalStats, nil
+}
+
+func (m *MockSessionService) GetTotalTimeline(period string, limit int) (*TimeSeriesResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.TotalTimeline, nil
+}
+
+func (m *MockSessionService) GetDailyStats(date string) (*DailyStatsResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.DailyStats, nil
 }
 
 func TestHealthHandler(t *testing.T) {
