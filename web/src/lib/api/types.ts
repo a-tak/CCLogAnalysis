@@ -207,3 +207,20 @@ export interface TotalStats {
   lastSession: string
   errorRate: number
 }
+
+// Daily Group Statistics (for drilldown)
+export interface DailyGroupStats {
+  groupId: number
+  groupName: string
+  sessionCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+}
+
+export interface DailyStatsResponse {
+  date: string
+  groups: DailyGroupStats[]
+}

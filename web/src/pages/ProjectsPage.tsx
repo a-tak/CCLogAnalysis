@@ -4,9 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { api, ApiError } from '@/lib/api/client'
-import type { Project, ProjectGroup, TotalStats, TimeSeriesResponse } from '@/lib/api/types'
-import { Folder, GitBranch, Activity, Zap, AlertCircle, Layers } from 'lucide-react'
+import type { Project, ProjectGroup, TotalStats, TimeSeriesResponse, DailyStatsResponse } from '@/lib/api/types'
+import { Folder, GitBranch, Activity, Zap, AlertCircle, Layers, X } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 
 export function ProjectsPage() {
@@ -17,6 +18,11 @@ export function ProjectsPage() {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Drilldown state
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [dailyStats, setDailyStats] = useState<DailyStatsResponse | null>(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -49,6 +55,30 @@ export function ProjectsPage() {
     loadData()
   }, [period])
 
+  // Fetch daily stats when date is selected
+  useEffect(() => {
+    if (!selectedDate) {
+      setDailyStats(null)
+      return
+    }
+
+    const dateToFetch = selectedDate
+    async function loadDailyStats() {
+      try {
+        setDailyLoading(true)
+        const stats = await api.getDailyStats(dateToFetch)
+        setDailyStats(stats)
+      } catch (err) {
+        console.error('Failed to load daily stats:', err)
+        setDailyStats(null)
+      } finally {
+        setDailyLoading(false)
+      }
+    }
+
+    loadDailyStats()
+  }, [selectedDate])
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
     return date.toLocaleDateString('ja-JP', {
@@ -60,6 +90,25 @@ export function ProjectsPage() {
 
   const formatNumber = (num: number) => num.toLocaleString('ja-JP')
   const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
+
+  // Handle chart click for drilldown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleChartClick = (data: any) => {
+    if (data && data.activePayload && data.activePayload.length > 0) {
+      const clickedData = data.activePayload[0].payload
+      if (clickedData && clickedData.periodStart) {
+        // Extract date in YYYY-MM-DD format
+        const date = new Date(clickedData.periodStart)
+        const dateStr = date.toISOString().split('T')[0]
+        setSelectedDate(dateStr)
+      }
+    }
+  }
+
+  const closeDrilldown = () => {
+    setSelectedDate(null)
+    setDailyStats(null)
+  }
 
   return (
     <div className="space-y-4">
@@ -124,7 +173,10 @@ export function ProjectsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>トークン使用量推移</CardTitle>
-              <CardDescription>全プロジェクトの時系列トークン使用状況</CardDescription>
+              <CardDescription>
+                全プロジェクトの時系列トークン使用状況
+                {period === 'day' && <span className="text-primary ml-2">(クリックで詳細表示)</span>}
+              </CardDescription>
             </div>
             <Tabs value={period} onValueChange={(v: string) => setPeriod(v as 'day' | 'week' | 'month')}>
               <TabsList>
@@ -143,7 +195,11 @@ export function ProjectsPage() {
           )}
           {!loading && timeline && timeline.data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={[...timeline.data].reverse()}>
+              <LineChart
+                data={[...timeline.data].reverse()}
+                onClick={period === 'day' ? handleChartClick : undefined}
+                style={period === 'day' ? { cursor: 'pointer' } : undefined}
+              >
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="periodStart"
@@ -169,6 +225,7 @@ export function ProjectsPage() {
                   stroke="#8884d8"
                   name="入力トークン"
                   strokeWidth={2}
+                  activeDot={period === 'day' ? { r: 8 } : undefined}
                 />
                 <Line
                   type="monotone"
@@ -176,6 +233,7 @@ export function ProjectsPage() {
                   stroke="#82ca9d"
                   name="出力トークン"
                   strokeWidth={2}
+                  activeDot={period === 'day' ? { r: 8 } : undefined}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -186,6 +244,85 @@ export function ProjectsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Drilldown Panel */}
+      {selectedDate && (
+        <Card className="border-primary">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  {formatDate(selectedDate)} のグループ別トークン使用量
+                </CardTitle>
+                <CardDescription>
+                  グループをクリックすると詳細ページに移動します
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="icon" onClick={closeDrilldown}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {dailyLoading && (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            )}
+            {!dailyLoading && dailyStats && dailyStats.groups.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>グループ名</TableHead>
+                    <TableHead className="text-right">セッション数</TableHead>
+                    <TableHead className="text-right">入力トークン</TableHead>
+                    <TableHead className="text-right">出力トークン</TableHead>
+                    <TableHead className="text-right">合計トークン</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dailyStats.groups.map((group) => (
+                    <TableRow key={group.groupId} className="cursor-pointer hover:bg-accent">
+                      <TableCell className="font-medium">
+                        <Link
+                          to={`/groups/${group.groupId}`}
+                          className="text-primary hover:underline flex items-center gap-2"
+                        >
+                          <GitBranch className="h-4 w-4" />
+                          {group.groupName}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant="secondary">{group.sessionCount}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatNumber(group.totalInputTokens)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatNumber(group.totalOutputTokens)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {formatNumber(group.totalTokens)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {!dailyLoading && dailyStats && dailyStats.groups.length === 0 && (
+              <div className="text-center py-8 text-muted-foreground">
+                この日のデータはありません
+              </div>
+            )}
+            {!dailyLoading && !dailyStats && (
+              <div className="text-center py-8 text-muted-foreground">
+                データの取得に失敗しました
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabs: Groups (default) / All Projects */}
       <Tabs defaultValue="groups" className="w-full">

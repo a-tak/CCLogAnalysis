@@ -69,3 +69,30 @@ func (h *Handler) getTotalTimelineHandler(w http.ResponseWriter, r *http.Request
 
 	json.NewEncoder(w).Encode(timeline)
 }
+
+// getDailyStatsHandler returns group-wise statistics for a specific date
+func (h *Handler) getDailyStatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	date := r.PathValue("date")
+	if date == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "date is required",
+		})
+		return
+	}
+
+	stats, err := h.service.GetDailyStats(date)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "internal_error",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}

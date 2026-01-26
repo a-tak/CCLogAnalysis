@@ -132,6 +132,7 @@ func (h *Handler) Routes() http.Handler {
 	// Total stats endpoints (all projects combined)
 	mux.HandleFunc("GET /api/stats/total", h.getTotalStatsHandler)
 	mux.HandleFunc("GET /api/stats/timeline", h.getTotalTimelineHandler)
+	mux.HandleFunc("GET /api/stats/daily/{date}", h.getDailyStatsHandler)
 
 	// Scan status endpoint
 	mux.HandleFunc("GET /api/scan/status", h.getScanStatusHandler)

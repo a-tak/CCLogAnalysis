@@ -580,6 +580,33 @@ func (s *DatabaseSessionService) GetTotalTimeline(period string, limit int) (*Ti
 	}, nil
 }
 
+// GetDailyStats returns group-wise statistics for a specific date
+func (s *DatabaseSessionService) GetDailyStats(date string) (*DailyStatsResponse, error) {
+	stats, err := s.db.GetDailyGroupStats(date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get daily stats: %w", err)
+	}
+
+	groups := make([]DailyGroupStatsResponse, 0, len(stats))
+	for _, g := range stats {
+		groups = append(groups, DailyGroupStatsResponse{
+			GroupID:                  g.GroupID,
+			GroupName:                g.GroupName,
+			SessionCount:             g.SessionCount,
+			TotalInputTokens:         g.TotalInputTokens,
+			TotalOutputTokens:        g.TotalOutputTokens,
+			TotalCacheCreationTokens: g.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     g.TotalCacheReadTokens,
+			TotalTokens:              g.TotalInputTokens + g.TotalOutputTokens,
+		})
+	}
+
+	return &DailyStatsResponse{
+		Date:   date,
+		Groups: groups,
+	}, nil
+}
+
 // formatDuration formats a duration as a human-readable string
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

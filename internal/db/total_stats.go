@@ -171,3 +171,66 @@ func (db *DB) GetTotalTimeSeriesStats(period string, limit int) ([]TimeSeriesSta
 
 	return timeSeriesStats, nil
 }
+
+// DailyGroupStats represents statistics for a single group on a specific date
+type DailyGroupStats struct {
+	GroupID                  int64   `json:"groupId"`
+	GroupName                string  `json:"groupName"`
+	SessionCount             int     `json:"sessionCount"`
+	TotalInputTokens         int     `json:"totalInputTokens"`
+	TotalOutputTokens        int     `json:"totalOutputTokens"`
+	TotalCacheCreationTokens int     `json:"totalCacheCreationTokens"`
+	TotalCacheReadTokens     int     `json:"totalCacheReadTokens"`
+}
+
+// GetDailyGroupStats retrieves group-wise statistics for a specific date
+func (db *DB) GetDailyGroupStats(date string) ([]DailyGroupStats, error) {
+	query := `
+		SELECT
+			pg.id as group_id,
+			pg.name as group_name,
+			COUNT(s.id) as session_count,
+			COALESCE(SUM(s.total_input_tokens), 0) as total_input_tokens,
+			COALESCE(SUM(s.total_output_tokens), 0) as total_output_tokens,
+			COALESCE(SUM(s.total_cache_creation_tokens), 0) as total_cache_creation_tokens,
+			COALESCE(SUM(s.total_cache_read_tokens), 0) as total_cache_read_tokens
+		FROM project_groups pg
+		INNER JOIN project_group_mappings pgm ON pg.id = pgm.group_id
+		INNER JOIN projects p ON pgm.project_id = p.id
+		INNER JOIN sessions s ON p.id = s.project_id
+		WHERE DATE(s.start_time) = ?
+		GROUP BY pg.id, pg.name
+		HAVING session_count > 0
+		ORDER BY (total_input_tokens + total_output_tokens) DESC
+	`
+
+	rows, err := db.conn.Query(query, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query daily group stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []DailyGroupStats
+	for rows.Next() {
+		var s DailyGroupStats
+		err := rows.Scan(
+			&s.GroupID,
+			&s.GroupName,
+			&s.SessionCount,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalCacheCreationTokens,
+			&s.TotalCacheReadTokens,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan daily group stats: %w", err)
+		}
+		stats = append(stats, s)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating daily group stats: %w", err)
+	}
+
+	return stats, nil
+}
