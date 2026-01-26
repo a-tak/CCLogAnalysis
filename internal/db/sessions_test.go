@@ -996,3 +996,148 @@ func TestCalculateFirstUserMessage(t *testing.T) {
 		}
 	})
 }
+
+func TestUpdateSession(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("既存セッションを更新できる", func(t *testing.T) {
+		// テストプロジェクト作成
+		projectName := "update-test-project"
+		decodedPath := "/path/to/update-test-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 初期セッション作成
+		session := createTestSession("update-1")
+		initialModTime := time.Now()
+		err = db.CreateSession(session, projectName, initialModTime)
+		if err != nil {
+			t.Fatalf("Failed to create initial session: %v", err)
+		}
+
+		// セッションを更新（新しいエントリとトークン追加）
+		newEntry := parser.LogEntry{
+			Type:      "user",
+			Timestamp: time.Now(),
+			SessionID: session.ID,
+			UUID:      "uuid-new",
+			Cwd:       session.ProjectPath,
+			Version:   "1.0.0",
+			GitBranch: session.GitBranch,
+			Message: &parser.Message{
+				Role:    "user",
+				Content: []parser.Content{{Type: "text", Text: "New message"}},
+			},
+		}
+		session.Entries = append(session.Entries, newEntry)
+		session.TotalTokens.InputTokens += 100
+		session.TotalTokens.OutputTokens += 50
+		session.EndTime = time.Now()
+		updatedModTime := time.Now().Add(1 * time.Second)
+
+		// UpdateSession を呼び出し
+		err = db.UpdateSession(session, projectName, updatedModTime)
+		if err != nil {
+			t.Fatalf("Failed to update session: %v", err)
+		}
+
+		// 更新されたセッションを取得（DBから）
+		var totalInputTokens, totalOutputTokens int
+		err = db.conn.QueryRow("SELECT total_input_tokens, total_output_tokens FROM sessions WHERE id = ?", session.ID).Scan(&totalInputTokens, &totalOutputTokens)
+		if err != nil {
+			t.Fatalf("Failed to get updated session: %v", err)
+		}
+
+		// トークン数が更新されていることを確認
+		if totalInputTokens != session.TotalTokens.InputTokens {
+			t.Errorf("Expected input_tokens=%d, got %d", session.TotalTokens.InputTokens, totalInputTokens)
+		}
+		if totalOutputTokens != session.TotalTokens.OutputTokens {
+			t.Errorf("Expected output_tokens=%d, got %d", session.TotalTokens.OutputTokens, totalOutputTokens)
+		}
+
+		// メッセージ数が更新されていることを確認（log_entries経由）
+		var messageCount int
+		query := `
+			SELECT COUNT(*) FROM messages m
+			JOIN log_entries le ON m.log_entry_id = le.id
+			WHERE le.session_id = ?
+		`
+		err = db.conn.QueryRow(query, session.ID).Scan(&messageCount)
+		if err != nil {
+			t.Fatalf("Failed to query messages: %v", err)
+		}
+		// Entries の中で Message があるものだけカウント
+		expectedCount := 0
+		for _, entry := range session.Entries {
+			if entry.Message != nil {
+				expectedCount++
+			}
+		}
+		if messageCount != expectedCount {
+			t.Errorf("Expected %d messages, got %d", expectedCount, messageCount)
+		}
+	})
+
+	t.Run("file_mod_timeが更新される", func(t *testing.T) {
+		// テストプロジェクト作成
+		projectName := "modtime-test-project"
+		decodedPath := "/path/to/modtime-test-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 初期セッション作成
+		session := createTestSession("modtime-1")
+		initialModTime := time.Now()
+		err = db.CreateSession(session, projectName, initialModTime)
+		if err != nil {
+			t.Fatalf("Failed to create initial session: %v", err)
+		}
+
+		// 更新
+		updatedModTime := time.Now().Add(5 * time.Second)
+		err = db.UpdateSession(session, projectName, updatedModTime)
+		if err != nil {
+			t.Fatalf("Failed to update session: %v", err)
+		}
+
+		// file_mod_time が更新されていることを確認
+		var fileModTimeStr string
+		err = db.conn.QueryRow("SELECT file_mod_time FROM sessions WHERE id = ?", session.ID).Scan(&fileModTimeStr)
+		if err != nil {
+			t.Fatalf("Failed to query file_mod_time: %v", err)
+		}
+
+		fileModTime, err := time.Parse(time.RFC3339, fileModTimeStr)
+		if err != nil {
+			t.Fatalf("Failed to parse file_mod_time: %v", err)
+		}
+
+		// 更新されたmodTimeとほぼ同じであることを確認（1秒以内の誤差）
+		if fileModTime.Sub(updatedModTime).Abs() > 1*time.Second {
+			t.Errorf("file_mod_time not updated correctly: expected %v, got %v", updatedModTime, fileModTime)
+		}
+	})
+
+	t.Run("存在しないセッションでエラーを返す", func(t *testing.T) {
+		// テストプロジェクト作成
+		projectName := "error-test-project"
+		decodedPath := "/path/to/error-test-project"
+		_, err := db.CreateProject(projectName, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 存在しないセッションを更新しようとする
+		session := createTestSession("non-existent")
+		err = db.UpdateSession(session, projectName, time.Now())
+		if err == nil {
+			t.Error("Expected error for non-existent session, got nil")
+		}
+	})
+}
