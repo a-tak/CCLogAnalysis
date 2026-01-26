@@ -233,31 +233,120 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 		"count": len(projectNames),
 	})
 
+	// 新規プロジェクト検出フラグ
+	hasNewProjects := false
+
 	for _, projectName := range projectNames {
 		// プロジェクトをDBから取得または作成
 		project, err := database.GetProjectByName(projectName)
 		if err != nil {
 			// プロジェクトが存在しない場合は作成
-			decodedPath := parser.DecodeProjectPath(projectName)
-			projectID, err := database.CreateProject(projectName, decodedPath)
-			if err != nil {
-				log.ErrorWithContext("Failed to create project", map[string]interface{}{
-					"project": projectName,
-					"error":   err.Error(),
-				})
-				result.ErrorCount++
-				continue
-			}
+			hasNewProjects = true
 
-			// 作成したプロジェクトを取得
-			project, err = database.GetProjectByID(projectID)
+			decodedPath := parser.DecodeProjectPath(projectName)
+
+			// 実際の作業ディレクトリを取得してGit Root検出
+			workingDir, err := p.GetProjectWorkingDirectory(projectName)
 			if err != nil {
-				log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+				// セッションが存在しない、またはcwdが取得できない
+				log.WarnWithContext("Could not get working directory", map[string]interface{}{
 					"project": projectName,
 					"error":   err.Error(),
 				})
-				result.ErrorCount++
-				continue
+				projectID, err := database.CreateProject(projectName, decodedPath)
+				if err != nil {
+					log.ErrorWithContext("Failed to create project", map[string]interface{}{
+						"project": projectName,
+						"error":   err.Error(),
+					})
+					result.ErrorCount++
+					continue
+				}
+
+				// 作成したプロジェクトを取得
+				project, err = database.GetProjectByID(projectID)
+				if err != nil {
+					log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+						"project": projectName,
+						"error":   err.Error(),
+					})
+					result.ErrorCount++
+					continue
+				}
+			} else {
+				// 実際の作業ディレクトリでGit Root検出
+				gitRoot, gitErr := gitutil.DetectGitRoot(workingDir)
+				if gitErr != nil {
+					log.WarnWithContext("Failed to detect git root", map[string]interface{}{
+						"project": projectName,
+						"error":   gitErr.Error(),
+					})
+					projectID, err := database.CreateProject(projectName, decodedPath)
+					if err != nil {
+						log.ErrorWithContext("Failed to create project", map[string]interface{}{
+							"project": projectName,
+							"error":   err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+
+					project, err = database.GetProjectByID(projectID)
+					if err != nil {
+						log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+							"project": projectName,
+							"error":   err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+				} else if gitRoot != "" {
+					projectID, err := database.CreateProjectWithGitRoot(projectName, decodedPath, gitRoot)
+					if err != nil {
+						log.ErrorWithContext("Failed to create project with git root", map[string]interface{}{
+							"project":  projectName,
+							"git_root": gitRoot,
+							"error":    err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+
+					log.InfoWithContext("Created project with git root", map[string]interface{}{
+						"project":  projectName,
+						"git_root": gitRoot,
+					})
+
+					project, err = database.GetProjectByID(projectID)
+					if err != nil {
+						log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+							"project": projectName,
+							"error":   err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+				} else {
+					projectID, err := database.CreateProject(projectName, decodedPath)
+					if err != nil {
+						log.ErrorWithContext("Failed to create project", map[string]interface{}{
+							"project": projectName,
+							"error":   err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+
+					project, err = database.GetProjectByID(projectID)
+					if err != nil {
+						log.ErrorWithContext("Failed to get created project", map[string]interface{}{
+							"project": projectName,
+							"error":   err.Error(),
+						})
+						result.ErrorCount++
+						continue
+					}
+				}
 			}
 		}
 
@@ -375,6 +464,17 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 			"sessions_synced":  result.SessionsSynced,
 			"sessions_skipped": result.SessionsSkipped,
 		})
+	}
+
+	// 新規プロジェクトが検出された場合のみグループを同期
+	if hasNewProjects {
+		if err := database.SyncProjectGroups(); err != nil {
+			log.WarnWithContext("Failed to sync project groups", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			log.Info("Project groups synchronized after new projects detected")
+		}
 	}
 
 	log.InfoWithContext("SyncIncremental completed", map[string]interface{}{
