@@ -148,7 +148,7 @@ export interface TimeSeriesResponse {
 export interface ProjectGroup {
   id: number
   name: string
-  gitRoot: string
+  gitRoot: string | null
   createdAt: string
   updatedAt: string
 }
@@ -160,7 +160,7 @@ export interface ProjectGroupListResponse {
 export interface ProjectGroupDetail {
   id: number
   name: string
-  gitRoot: string
+  gitRoot: string | null
   createdAt: string
   updatedAt: string
   projects: Project[]

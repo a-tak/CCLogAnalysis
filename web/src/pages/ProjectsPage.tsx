@@ -5,6 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { api, ApiError } from '@/lib/api/client'
 import type { Project, ProjectGroup, TotalStats, TimeSeriesResponse, DailyStatsResponse } from '@/lib/api/types'
 import { Folder, GitBranch, Activity, Zap, AlertCircle, Layers, X } from 'lucide-react'
@@ -23,6 +24,7 @@ export function ProjectsPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [dailyStats, setDailyStats] = useState<DailyStatsResponse | null>(null)
   const [dailyLoading, setDailyLoading] = useState(false)
+  const [dailyError, setDailyError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
@@ -62,12 +64,21 @@ export function ProjectsPage() {
 
     const dateToFetch = selectedDate
     async function loadDailyStats() {
+      // 日付フォーマット検証
+      if (!isValidDateFormat(dateToFetch)) {
+        setDailyError('無効な日付フォーマットです')
+        setDailyStats(null)
+        return
+      }
+
       try {
         setDailyLoading(true)
+        setDailyError(null)
         const stats = await api.getDailyStats(dateToFetch)
         setDailyStats(stats)
       } catch (err) {
-        console.error('Failed to load daily stats:', err)
+        const errorMsg = err instanceof ApiError ? err.message : 'データの取得に失敗しました'
+        setDailyError(errorMsg)
         setDailyStats(null)
       } finally {
         setDailyLoading(false)
@@ -76,6 +87,17 @@ export function ProjectsPage() {
 
     loadDailyStats()
   }, [selectedDate])
+
+  const isValidDateFormat = (dateStr: string): boolean => {
+    // YYYY-MM-DD 形式の検証
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/
+    if (!datePattern.test(dateStr)) {
+      return false
+    }
+    // 実際に有効な日付かチェック
+    const date = new Date(dateStr)
+    return !isNaN(date.getTime())
+  }
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr)
@@ -176,11 +198,7 @@ export function ProjectsPage() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading && (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
-          )}
+          {loading && <LoadingSpinner />}
           {!loading && timeline && timeline.data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={[...timeline.data].reverse()}>
@@ -270,12 +288,13 @@ export function ProjectsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {dailyLoading && (
+            {dailyLoading && <LoadingSpinner />}
+            {!dailyLoading && dailyError && (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                <p className="text-sm text-destructive">{dailyError}</p>
               </div>
             )}
-            {!dailyLoading && dailyStats && dailyStats.groups.length > 0 && (
+            {!dailyLoading && !dailyError && dailyStats && dailyStats.groups.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -315,14 +334,9 @@ export function ProjectsPage() {
                 </TableBody>
               </Table>
             )}
-            {!dailyLoading && dailyStats && dailyStats.groups.length === 0 && (
+            {!dailyLoading && !dailyError && dailyStats && dailyStats.groups.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 この日のデータはありません
-              </div>
-            )}
-            {!dailyLoading && !dailyStats && (
-              <div className="text-center py-8 text-muted-foreground">
-                データの取得に失敗しました
               </div>
             )}
           </CardContent>
@@ -347,11 +361,7 @@ export function ProjectsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              )}
+              {loading && <LoadingSpinner />}
 
               {error && (
                 <p className="text-sm text-destructive">{error}</p>
@@ -372,8 +382,8 @@ export function ProjectsPage() {
                             {group.name}
                           </CardTitle>
                           <CardDescription className="text-xs">
-                            <div className="truncate" title={group.gitRoot}>
-                              {group.gitRoot}
+                            <div className="truncate" title={group.gitRoot || undefined}>
+                              {group.gitRoot || '-'}
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
                               更新: {formatDate(group.updatedAt)}
@@ -400,11 +410,7 @@ export function ProjectsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {loading && (
-                <div className="flex items-center justify-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                </div>
-              )}
+              {loading && <LoadingSpinner />}
 
               {error && (
                 <p className="text-sm text-destructive">{error}</p>

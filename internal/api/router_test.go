@@ -333,3 +333,186 @@ func TestAnalyzeHandler(t *testing.T) {
 		t.Errorf("Expected 10 sessions parsed, got %d", resp.SessionsParsed)
 	}
 }
+
+func TestGetTotalStatsHandler(t *testing.T) {
+	mockService := &MockSessionService{
+		TotalStats: &TotalStatsResponse{
+			TotalGroups:              2,
+			TotalProjects:            5,
+			TotalSessions:            50,
+			TotalInputTokens:         30000,
+			TotalOutputTokens:        20000,
+			TotalCacheCreationTokens: 5000,
+			TotalCacheReadTokens:     1000,
+			TotalTokens:              50000,
+			AvgTokens:                1000,
+			FirstSession:             time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			LastSession:              time.Date(2026, 1, 26, 0, 0, 0, 0, time.UTC),
+			ErrorRate:                0.05,
+		},
+	}
+
+	mockDB := &db.DB{}
+	mockParser := parser.NewParser("/tmp")
+	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+	handler := NewHandler(mockService, mockScanManager)
+	router := handler.Routes()
+
+	req := httptest.NewRequest("GET", "/api/stats/total", nil)
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	var resp TotalStatsResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if resp.TotalGroups != 2 {
+		t.Errorf("Expected 2 groups, got %d", resp.TotalGroups)
+	}
+
+	if resp.TotalTokens != 50000 {
+		t.Errorf("Expected 50000 total tokens, got %d", resp.TotalTokens)
+	}
+}
+
+func TestGetTotalTimelineHandler(t *testing.T) {
+	t.Run("正常系：日別タイムライン", func(t *testing.T) {
+		mockService := &MockSessionService{
+			TotalTimeline: &TimeSeriesResponse{
+				Period: "day",
+				Data: []TimeSeriesDataPoint{
+					{
+						PeriodStart:       time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC),
+						PeriodEnd:         time.Date(2026, 1, 26, 0, 0, 0, 0, time.UTC),
+						SessionCount:      5,
+						TotalInputTokens:  1000,
+						TotalOutputTokens: 800,
+						TotalTokens:       1800,
+					},
+				},
+			},
+		}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/timeline?period=day&limit=30", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var resp TimeSeriesResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if resp.Period != "day" {
+			t.Errorf("Expected period 'day', got '%s'", resp.Period)
+		}
+
+		if len(resp.Data) != 1 {
+			t.Errorf("Expected 1 data point, got %d", len(resp.Data))
+		}
+	})
+
+	t.Run("エラー系：無効なperiod", func(t *testing.T) {
+		mockService := &MockSessionService{}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/timeline?period=invalid", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+}
+
+func TestGetDailyStatsHandler(t *testing.T) {
+	t.Run("正常系：日別グループ統計", func(t *testing.T) {
+		mockService := &MockSessionService{
+			DailyStats: &DailyStatsResponse{
+				Date: "2026-01-26",
+				Groups: []DailyGroupStatsResponse{
+					{
+						GroupID:                  1,
+						GroupName:                "test-group",
+						SessionCount:             5,
+						TotalInputTokens:         1000,
+						TotalOutputTokens:        800,
+						TotalCacheCreationTokens: 200,
+						TotalCacheReadTokens:     50,
+						TotalTokens:              1800,
+					},
+				},
+			},
+		}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/daily/2026-01-26", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var resp DailyStatsResponse
+		if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if resp.Date != "2026-01-26" {
+			t.Errorf("Expected date '2026-01-26', got '%s'", resp.Date)
+		}
+
+		if len(resp.Groups) != 1 {
+			t.Errorf("Expected 1 group, got %d", len(resp.Groups))
+		}
+	})
+
+	t.Run("エラー系：dateパラメータなし", func(t *testing.T) {
+		mockService := &MockSessionService{}
+
+		mockDB := &db.DB{}
+		mockParser := parser.NewParser("/tmp")
+		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
+		handler := NewHandler(mockService, mockScanManager)
+		router := handler.Routes()
+
+		req := httptest.NewRequest("GET", "/api/stats/daily/", nil)
+		w := httptest.NewRecorder()
+
+		router.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404, got %d", w.Code)
+		}
+	})
+}
