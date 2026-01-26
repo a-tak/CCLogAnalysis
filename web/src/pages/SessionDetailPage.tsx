@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Button } from '@/components/ui/button'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { api, ApiError } from '@/lib/api/client'
 import type { SessionDetail } from '@/lib/api/types'
 import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
@@ -19,6 +21,10 @@ export function SessionDetailPage() {
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // ページング状態
+  const [messagesCurrentPage, setMessagesCurrentPage] = useState(1)
+  const [toolCallsCurrentPage, setToolCallsCurrentPage] = useState(1)
 
   useEffect(() => {
     async function loadSessionDetail() {
@@ -42,6 +48,28 @@ export function SessionDetailPage() {
 
     loadSessionDetail()
   }, [projectName, sessionId])
+
+  // ページサイズ定数
+  const messagesPageSize = 50
+  const toolCallsPageSize = 20
+
+  // 会話履歴のページング計算
+  const messagesTotalPages = session ? Math.ceil(session.messages.length / messagesPageSize) : 0
+  const messagesStartIndex = (messagesCurrentPage - 1) * messagesPageSize
+  const messagesEndIndex = messagesStartIndex + messagesPageSize
+  const displayedMessages = useMemo(
+    () => session?.messages.slice(messagesStartIndex, messagesEndIndex) || [],
+    [session?.messages, messagesStartIndex, messagesEndIndex]
+  )
+
+  // ツール呼び出しのページング計算
+  const toolCallsTotalPages = session ? Math.ceil(session.toolCalls.length / toolCallsPageSize) : 0
+  const toolCallsStartIndex = (toolCallsCurrentPage - 1) * toolCallsPageSize
+  const toolCallsEndIndex = toolCallsStartIndex + toolCallsPageSize
+  const displayedToolCalls = useMemo(
+    () => session?.toolCalls.slice(toolCallsStartIndex, toolCallsEndIndex) || [],
+    [session?.toolCalls, toolCallsStartIndex, toolCallsEndIndex]
+  )
 
   // Helper to build breadcrumb items
   const buildBreadcrumbItems = (sessionData?: SessionDetail | null) => {
@@ -249,7 +277,40 @@ export function SessionDetailPage() {
           <CardTitle>Tool Calls</CardTitle>
           <CardDescription>{session.toolCalls.length} tool calls</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* 上部ページングUI */}
+          {toolCallsTotalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {toolCallsStartIndex + 1} - {Math.min(toolCallsEndIndex, session.toolCalls.length)} / {session.toolCalls.length}件
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage - 1)}
+                  disabled={toolCallsCurrentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  前へ
+                </Button>
+                <span className="flex items-center px-4 text-sm text-muted-foreground">
+                  {toolCallsCurrentPage} / {toolCallsTotalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage + 1)}
+                  disabled={toolCallsCurrentPage === toolCallsTotalPages}
+                >
+                  次へ
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* データ表示 */}
           <Table>
             <TableHeader>
               <TableRow>
@@ -260,8 +321,8 @@ export function SessionDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {session.toolCalls.slice(0, 20).map((call, index) => (
-                <TableRow key={index}>
+              {displayedToolCalls.map((call, index) => (
+                <TableRow key={toolCallsStartIndex + index}>
                   <TableCell className="text-muted-foreground">
                     {formatDate(call.timestamp)}
                   </TableCell>
@@ -280,10 +341,37 @@ export function SessionDetailPage() {
               ))}
             </TableBody>
           </Table>
-          {session.toolCalls.length > 20 && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Showing 20 of {session.toolCalls.length} tool calls
-            </p>
+
+          {/* 下部ページングUI */}
+          {toolCallsTotalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {toolCallsStartIndex + 1} - {Math.min(toolCallsEndIndex, session.toolCalls.length)} / {session.toolCalls.length}件
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage - 1)}
+                  disabled={toolCallsCurrentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  前へ
+                </Button>
+                <span className="flex items-center px-4 text-sm text-muted-foreground">
+                  {toolCallsCurrentPage} / {toolCallsTotalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage + 1)}
+                  disabled={toolCallsCurrentPage === toolCallsTotalPages}
+                >
+                  次へ
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -294,12 +382,72 @@ export function SessionDetailPage() {
           <CardTitle>Conversation History</CardTitle>
           <CardDescription>{session.messages.length} messages</CardDescription>
         </CardHeader>
-        <CardContent>
-          <ConversationHistory messages={session.messages.slice(0, 50)} />
-          {session.messages.length > 50 && (
-            <p className="mt-4 text-sm text-muted-foreground">
-              Showing 50 of {session.messages.length} messages
-            </p>
+        <CardContent className="space-y-4">
+          {/* 上部ページングUI */}
+          {messagesTotalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {messagesStartIndex + 1} - {Math.min(messagesEndIndex, session.messages.length)} / {session.messages.length}件
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMessagesCurrentPage(messagesCurrentPage - 1)}
+                  disabled={messagesCurrentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  前へ
+                </Button>
+                <span className="flex items-center px-4 text-sm text-muted-foreground">
+                  {messagesCurrentPage} / {messagesTotalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMessagesCurrentPage(messagesCurrentPage + 1)}
+                  disabled={messagesCurrentPage === messagesTotalPages}
+                >
+                  次へ
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* データ表示 */}
+          <ConversationHistory messages={displayedMessages} />
+
+          {/* 下部ページングUI */}
+          {messagesTotalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {messagesStartIndex + 1} - {Math.min(messagesEndIndex, session.messages.length)} / {session.messages.length}件
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMessagesCurrentPage(messagesCurrentPage - 1)}
+                  disabled={messagesCurrentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4 mr-1" />
+                  前へ
+                </Button>
+                <span className="flex items-center px-4 text-sm text-muted-foreground">
+                  {messagesCurrentPage} / {messagesTotalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setMessagesCurrentPage(messagesCurrentPage + 1)}
+                  disabled={messagesCurrentPage === messagesTotalPages}
+                >
+                  次へ
+                  <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
