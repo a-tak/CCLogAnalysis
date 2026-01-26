@@ -91,18 +91,10 @@ export function ProjectsPage() {
   const formatNumber = (num: number) => num.toLocaleString('ja-JP')
   const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
 
-  // Handle chart click for drilldown
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleChartClick = (data: any) => {
-    if (data && data.activePayload && data.activePayload.length > 0) {
-      const clickedData = data.activePayload[0].payload
-      if (clickedData && clickedData.periodStart) {
-        // Extract date in YYYY-MM-DD format
-        const date = new Date(clickedData.periodStart)
-        const dateStr = date.toISOString().split('T')[0]
-        setSelectedDate(dateStr)
-      }
-    }
+  // Handle date badge click
+  const handleDateClick = (dateStr: string) => {
+    console.log('Date clicked:', dateStr)
+    setSelectedDate(dateStr)
   }
 
   const closeDrilldown = () => {
@@ -175,7 +167,6 @@ export function ProjectsPage() {
               <CardTitle>トークン使用量推移</CardTitle>
               <CardDescription>
                 全プロジェクトの時系列トークン使用状況
-                {period === 'day' && <span className="text-primary ml-2">(クリックで詳細表示)</span>}
               </CardDescription>
             </div>
             <Tabs value={period} onValueChange={(v: string) => setPeriod(v as 'day' | 'week' | 'month')}>
@@ -195,11 +186,7 @@ export function ProjectsPage() {
           )}
           {!loading && timeline && timeline.data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart
-                data={[...timeline.data].reverse()}
-                onClick={period === 'day' ? handleChartClick : undefined}
-                style={period === 'day' ? { cursor: 'pointer' } : undefined}
-              >
+              <LineChart data={[...timeline.data].reverse()}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="periodStart"
@@ -225,7 +212,6 @@ export function ProjectsPage() {
                   stroke="#8884d8"
                   name="入力トークン"
                   strokeWidth={2}
-                  activeDot={period === 'day' ? { r: 8 } : undefined}
                 />
                 <Line
                   type="monotone"
@@ -233,7 +219,6 @@ export function ProjectsPage() {
                   stroke="#82ca9d"
                   name="出力トークン"
                   strokeWidth={2}
-                  activeDot={period === 'day' ? { r: 8 } : undefined}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -243,6 +228,29 @@ export function ProjectsPage() {
             </div>
           )}
         </CardContent>
+        {period === 'day' && !loading && timeline && timeline.data.length > 0 && (
+          <CardContent className="pt-0">
+            <div className="text-sm text-muted-foreground mb-2">日付を選択してドリルダウン:</div>
+            <div className="flex flex-wrap gap-2">
+              {[...timeline.data].reverse().map((item) => {
+                const date = new Date(item.periodStart)
+                const dateStr = date.toISOString().split('T')[0]
+                const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
+                const isSelected = selectedDate === dateStr
+                return (
+                  <Badge
+                    key={dateStr}
+                    variant={isSelected ? 'default' : 'outline'}
+                    className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                    onClick={() => handleDateClick(dateStr)}
+                  >
+                    {displayDate}
+                  </Badge>
+                )
+              })}
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* Drilldown Panel */}
