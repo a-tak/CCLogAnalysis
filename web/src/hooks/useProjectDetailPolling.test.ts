@@ -49,7 +49,7 @@ describe('useProjectDetailPolling', () => {
     capturedCallback = null
 
     // usePolling が呼ばれたときに callback をキャプチャのみ（初回実行はしない）
-    vi.mocked(usePollingModule.usePolling).mockImplementation((callback: any) => {
+    vi.mocked(usePollingModule.usePolling).mockImplementation((callback: () => Promise<void>) => {
       capturedCallback = callback
     })
 

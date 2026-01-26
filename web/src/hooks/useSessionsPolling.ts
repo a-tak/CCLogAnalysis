@@ -20,6 +20,7 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -27,6 +28,10 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
 
       const response = await api.getSessions(projectName)
       setSessions(response.sessions)
+
+      if (isInitialLoad) {
+        setIsInitialLoad(false)
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
@@ -35,10 +40,16 @@ export function useSessionsPolling(projectName: string): UseSessionsPollingResul
       } else {
         setError('Failed to load sessions')
       }
+
+      if (isInitialLoad) {
+        setIsInitialLoad(false)
+      }
     } finally {
-      setLoading(false)
+      if (isInitialLoad) {
+        setLoading(false)
+      }
     }
-  }, [projectName])
+  }, [projectName, isInitialLoad])
 
   // 15秒ごとにポーリング
   usePolling(fetchData, 15000, true)

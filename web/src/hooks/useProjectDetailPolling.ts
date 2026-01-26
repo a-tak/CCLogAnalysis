@@ -26,6 +26,7 @@ export function useProjectDetailPolling(
   const [timeline, setTimeline] = useState<TimeSeriesResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -38,6 +39,10 @@ export function useProjectDetailPolling(
 
       setStats(statsData)
       setTimeline(timelineData)
+
+      if (isInitialLoad) {
+        setIsInitialLoad(false)
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message)
@@ -46,10 +51,16 @@ export function useProjectDetailPolling(
       } else {
         setError('Failed to load data')
       }
+
+      if (isInitialLoad) {
+        setIsInitialLoad(false)
+      }
     } finally {
-      setLoading(false)
+      if (isInitialLoad) {
+        setLoading(false)
+      }
     }
-  }, [projectName, period])
+  }, [projectName, period, isInitialLoad])
 
   // 15秒ごとにポーリング
   usePolling(fetchData, 15000, true)
