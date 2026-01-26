@@ -125,7 +125,7 @@ func (m *MockSessionService) GetDailyStats(date string) (*DailyStatsResponse, er
 
 func TestHealthHandler(t *testing.T) {
 	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
+	mockParser := parser.NewParser(t.TempDir())
 	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 	handler := NewHandler(nil, mockScanManager)
 	router := handler.Routes()
@@ -158,7 +158,7 @@ func TestListProjectsHandler(t *testing.T) {
 	}
 
 	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
+	mockParser := parser.NewParser(t.TempDir())
 	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
@@ -205,7 +205,7 @@ func TestListSessionsHandler(t *testing.T) {
 	}
 
 	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
+	mockParser := parser.NewParser(t.TempDir())
 	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
@@ -268,7 +268,7 @@ func TestGetSessionHandler(t *testing.T) {
 	}
 
 	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
+	mockParser := parser.NewParser(t.TempDir())
 	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
@@ -307,7 +307,7 @@ func TestAnalyzeHandler(t *testing.T) {
 	}
 
 	mockDB := &db.DB{}
-	mockParser := parser.NewParser("/tmp")
+	mockParser := parser.NewParser(t.TempDir())
 	mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 	handler := NewHandler(mockService, mockScanManager)
 	router := handler.Routes()
@@ -355,7 +355,7 @@ func TestGetTotalStatsHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -389,7 +389,7 @@ func TestGetTotalStatsHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -424,7 +424,7 @@ func TestGetTotalTimelineHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -456,7 +456,7 @@ func TestGetTotalTimelineHandler(t *testing.T) {
 		mockService := &MockSessionService{}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -477,7 +477,7 @@ func TestGetTotalTimelineHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -496,7 +496,7 @@ func TestGetTotalTimelineHandler(t *testing.T) {
 		mockService := &MockSessionService{}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -533,7 +533,7 @@ func TestGetDailyStatsHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -565,7 +565,7 @@ func TestGetDailyStatsHandler(t *testing.T) {
 		mockService := &MockSessionService{}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -586,7 +586,7 @@ func TestGetDailyStatsHandler(t *testing.T) {
 		}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
@@ -605,7 +605,7 @@ func TestGetDailyStatsHandler(t *testing.T) {
 		mockService := &MockSessionService{}
 
 		mockDB := &db.DB{}
-		mockParser := parser.NewParser("/tmp")
+		mockParser := parser.NewParser(t.TempDir())
 		mockScanManager := scanner.NewScanManager(mockDB, mockParser)
 		handler := NewHandler(mockService, mockScanManager)
 		router := handler.Routes()
