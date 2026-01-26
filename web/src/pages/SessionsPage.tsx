@@ -1,9 +1,7 @@
-import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { api, ApiError } from '@/lib/api/client'
-import type { SessionSummary } from '@/lib/api/types'
+import { useSessionsPolling } from '@/hooks/useSessionsPolling'
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString)
@@ -12,32 +10,9 @@ function formatDate(isoString: string): string {
 
 export function SessionsPage() {
   const { projectName } = useParams<{ projectName: string }>()
-  const [sessions, setSessions] = useState<SessionSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function loadSessions() {
-      if (!projectName) return
-
-      try {
-        setLoading(true)
-        setError(null)
-        const response = await api.getSessions(projectName)
-        setSessions(response.sessions)
-      } catch (err) {
-        if (err instanceof ApiError) {
-          setError(err.message)
-        } else {
-          setError('Failed to load sessions')
-        }
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    loadSessions()
-  }, [projectName])
+  // 15秒ごとにポーリングしてデータを自動更新
+  const { sessions, loading, error } = useSessionsPolling(projectName || '')
 
   return (
     <div className="space-y-4">
