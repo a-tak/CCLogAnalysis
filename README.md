@@ -8,7 +8,7 @@ Claude Codeに対する各種調整（モデル選択、プロンプト設定な
 
 ## バイナリダウンロード
 
-最新リリースは [GitHub Releases](https://github.com/a-tak/CCLogAnalysis/releases) からダウンロードできます。
+最新リリースは [GitHub Releases](https://github.com/{username}/{project-name}/releases) からダウンロードできます。
 
 ### 対応プラットフォーム
 
@@ -54,7 +54,7 @@ ccloganalysis.exe
 ## プロジェクト構成
 
 ```
-CCLogAnalysis/
+{project-name}/
 ├── cmd/
 │   └── server/
 │       └── main.go              # サーバーエントリポイント
@@ -104,8 +104,8 @@ CCLogAnalysis/
 1. リポジトリをクローン
 
 ```bash
-git clone https://github.com/{username}/CCLogAnalysis.git
-cd CCLogAnalysis
+git clone https://github.com/{username}/{project-name}.git
+cd {project-name}
 ```
 
 2. Go依存関係のインストール
@@ -338,9 +338,9 @@ make help
 **ワークツリーの場所:**
 
 ```
-~/Documents/GitHub/
-├── CCLogAnalysis/              # メインリポジトリ
-└── CCLogAnalysis.worktrees/    # ワークツリー用ディレクトリ
+{home-directory}/Documents/GitHub/
+├── {project-name}/              # メインリポジトリ
+└── {project-name}.worktrees/    # ワークツリー用ディレクトリ
     ├── feature-xyz/
     ├── fix-abc/
     └── 123-issue-title/

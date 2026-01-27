@@ -65,9 +65,16 @@ func (h *Handler) getProjectTimelineHandler(w http.ResponseWriter, r *http.Reque
 
 	limit := 30
 	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
+		l, err := strconv.Atoi(limitStr)
+		if err != nil || l <= 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(ErrorResponse{
+				Error:   "bad_request",
+				Message: "limit must be a positive integer",
+			})
+			return
 		}
+		limit = l
 	}
 
 	timeline, err := h.service.GetProjectTimeline(projectName, period, limit)

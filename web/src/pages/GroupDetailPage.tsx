@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, ApiError } from '@/lib/api/client'
+import { api } from '@/lib/api/client'
 import type { ProjectGroupDetail, ProjectGroupStats, TimeSeriesResponse, GroupDailyStatsResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,8 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { Folder, Activity, Zap, TrendingUp, AlertCircle, GitBranch, X } from 'lucide-react'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
+import { useDrilldown } from '@/hooks/useDrilldown'
+import { formatDate, formatNumber, formatPercent } from '@/lib/utils/formatters'
 
 export default function GroupDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -21,11 +23,13 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Drilldown state
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [dailyStats, setDailyStats] = useState<GroupDailyStatsResponse | null>(null)
-  const [dailyLoading, setDailyLoading] = useState(false)
-  const [dailyError, setDailyError] = useState<string | null>(null)
+  // Drilldown hook
+  const drilldown = useDrilldown<GroupDailyStatsResponse>({
+    fetchData: (date) => {
+      const groupId = parseInt(id || '0', 10)
+      return api.getGroupDailyStats(groupId, date)
+    },
+  })
 
   useEffect(() => {
     if (!id) return
@@ -54,77 +58,6 @@ export default function GroupDetailPage() {
 
     fetchData()
   }, [id, period])
-
-  // Fetch daily stats when date is selected
-  useEffect(() => {
-    if (!selectedDate || !id) {
-      setDailyStats(null)
-      return
-    }
-
-    const dateToFetch = selectedDate
-    const groupId = parseInt(id, 10)
-
-    async function loadDailyStats() {
-      // 日付フォーマット検証
-      if (!isValidDateFormat(dateToFetch)) {
-        setDailyError('無効な日付フォーマットです')
-        setDailyStats(null)
-        return
-      }
-
-      try {
-        setDailyLoading(true)
-        setDailyError(null)
-        const stats = await api.getGroupDailyStats(groupId, dateToFetch)
-        setDailyStats(stats)
-      } catch (err) {
-        const errorMsg = err instanceof ApiError ? err.message : 'データの取得に失敗しました'
-        setDailyError(errorMsg)
-        setDailyStats(null)
-      } finally {
-        setDailyLoading(false)
-      }
-    }
-
-    loadDailyStats()
-  }, [selectedDate, id])
-
-  const isValidDateFormat = (dateStr: string): boolean => {
-    // YYYY-MM-DD 形式の検証
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/
-    if (!datePattern.test(dateStr)) {
-      return false
-    }
-    const date = new Date(dateStr)
-    return date instanceof Date && !isNaN(date.getTime())
-  }
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
-  const formatNumber = (num: number) => num.toLocaleString('ja-JP')
-  const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
-
-  // Handle date badge click (toggle)
-  const handleDateClick = (dateStr: string) => {
-    if (selectedDate === dateStr) {
-      setSelectedDate(null)
-    } else {
-      setSelectedDate(dateStr)
-    }
-  }
-
-  const closeDrilldown = () => {
-    setSelectedDate(null)
-    setDailyStats(null)
-  }
 
   if (loading) {
     return (
@@ -305,12 +238,12 @@ export default function GroupDetailPage() {
                 const date = new Date(item.periodStart)
                 const dateStr = date.toISOString().split('T')[0]
                 const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
-                const isSelected = selectedDate === dateStr
+                const isSelected = drilldown.selectedDate === dateStr
                 return (
                   <button
                     key={dateStr}
                     type="button"
-                    onClick={() => handleDateClick(dateStr)}
+                    onClick={() => drilldown.handleDateClick(dateStr)}
                     className={isSelected ?
                       "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer" :
                       "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-border text-foreground cursor-pointer hover:bg-primary hover:text-primary-foreground"
@@ -326,32 +259,32 @@ export default function GroupDetailPage() {
       </Card>
 
       {/* Drilldown Panel */}
-      {selectedDate && (
+      {drilldown.selectedDate && (
         <Card className="border-primary mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <Zap className="h-5 w-5" />
-                  {formatDate(selectedDate)} のプロジェクト別トークン使用量
+                  {formatDate(drilldown.selectedDate)} のプロジェクト別トークン使用量
                 </CardTitle>
                 <CardDescription>
                   プロジェクトをクリックすると詳細ページに移動します
                 </CardDescription>
               </div>
-              <Button variant="ghost" size="icon" onClick={closeDrilldown}>
+              <Button variant="ghost" size="icon" onClick={drilldown.close}>
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            {dailyLoading && <LoadingSpinner />}
-            {!dailyLoading && dailyError && (
+            {drilldown.loading && <LoadingSpinner />}
+            {!drilldown.loading && drilldown.error && (
               <div className="flex items-center justify-center py-8">
-                <p className="text-sm text-destructive">{dailyError}</p>
+                <p className="text-sm text-destructive">{drilldown.error}</p>
               </div>
             )}
-            {!dailyLoading && !dailyError && dailyStats && dailyStats.projects.length > 0 && (
+            {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.projects.length > 0 && (
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -363,7 +296,7 @@ export default function GroupDetailPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {dailyStats.projects.map((project) => (
+                  {drilldown.data.projects.map((project) => (
                     <TableRow key={project.projectId} className="cursor-pointer hover:bg-accent">
                       <TableCell className="font-medium">
                         <Link
@@ -391,7 +324,7 @@ export default function GroupDetailPage() {
                 </TableBody>
               </Table>
             )}
-            {!dailyLoading && !dailyError && dailyStats && dailyStats.projects.length === 0 && (
+            {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.projects.length === 0 && (
               <div className="text-center py-8 text-muted-foreground">
                 この日のデータはありません
               </div>

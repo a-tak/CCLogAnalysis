@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { api, ApiError } from '@/lib/api/client'
-import type { ProjectStats, TimeSeriesResponse, SessionSummary, ProjectDailyStatsResponse } from '@/lib/api/types'
+import { api } from '@/lib/api/client'
+import type { SessionSummary, ProjectDailyStatsResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,8 @@ import { Activity, Zap, TrendingUp, AlertCircle, X, GitBranch } from 'lucide-rea
 import { SessionListTab } from '@/components/sessions/SessionListTab'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 import { useProjectDetailPolling } from '@/hooks/useProjectDetailPolling'
+import { useDrilldown } from '@/hooks/useDrilldown'
+import { formatDate, formatNumber, formatPercent } from '@/lib/utils/formatters'
 
 export default function ProjectDetailPage() {
   const { name } = useParams<{ name: string }>()
@@ -25,11 +27,10 @@ export default function ProjectDetailPage() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('stats')
 
-  // Drilldown state
-  const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [dailyStats, setDailyStats] = useState<ProjectDailyStatsResponse | null>(null)
-  const [dailyLoading, setDailyLoading] = useState(false)
-  const [dailyError, setDailyError] = useState<string | null>(null)
+  // Drilldown hook
+  const drilldown = useDrilldown<ProjectDailyStatsResponse>({
+    fetchData: (date) => api.getProjectDailyStats(name || '', date),
+  })
 
   useEffect(() => {
     if (!name || activeTab !== 'sessions') return
@@ -48,74 +49,6 @@ export default function ProjectDetailPage() {
 
     fetchSessions()
   }, [name, activeTab])
-
-  // Fetch daily stats when date is selected
-  useEffect(() => {
-    if (!selectedDate || !name) {
-      setDailyStats(null)
-      return
-    }
-
-    const dateToFetch = selectedDate
-    const projectName = name
-
-    async function loadDailyStats() {
-      // 日付フォーマット検証
-      if (!isValidDateFormat(dateToFetch)) {
-        setDailyError('無効な日付フォーマットです')
-        setDailyStats(null)
-        return
-      }
-
-      try {
-        setDailyLoading(true)
-        setDailyError(null)
-        const stats = await api.getProjectDailyStats(projectName, dateToFetch)
-        setDailyStats(stats)
-      } catch (err) {
-        const errorMsg = err instanceof ApiError ? err.message : 'データの取得に失敗しました'
-        setDailyError(errorMsg)
-        setDailyStats(null)
-      } finally {
-        setDailyLoading(false)
-      }
-    }
-
-    loadDailyStats()
-  }, [selectedDate, name])
-
-  const isValidDateFormat = (dateStr: string): boolean => {
-    // YYYY-MM-DD 形式の検証
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/
-    if (!datePattern.test(dateStr)) {
-      return false
-    }
-    const date = new Date(dateStr)
-    return date instanceof Date && !isNaN(date.getTime())
-  }
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('ja-JP', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
-
-  // Handle date badge click (toggle)
-  const handleDateClick = (dateStr: string) => {
-    if (selectedDate === dateStr) {
-      setSelectedDate(null)
-    } else {
-      setSelectedDate(dateStr)
-    }
-  }
-
-  const closeDrilldown = () => {
-    setSelectedDate(null)
-    setDailyStats(null)
-  }
 
   if (loading) {
     return (
@@ -143,9 +76,6 @@ export default function ProjectDetailPage() {
       </div>
     )
   }
-
-  const formatNumber = (num: number) => num.toLocaleString('ja-JP')
-  const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
 
   return (
     <div className="container mx-auto py-8">
@@ -279,12 +209,12 @@ export default function ProjectDetailPage() {
                     const date = new Date(item.periodStart)
                     const dateStr = date.toISOString().split('T')[0]
                     const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
-                    const isSelected = selectedDate === dateStr
+                    const isSelected = drilldown.selectedDate === dateStr
                     return (
                       <button
                         key={dateStr}
                         type="button"
-                        onClick={() => handleDateClick(dateStr)}
+                        onClick={() => drilldown.handleDateClick(dateStr)}
                         className={isSelected ?
                           "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer" :
                           "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-border text-foreground cursor-pointer hover:bg-primary hover:text-primary-foreground"
@@ -300,32 +230,32 @@ export default function ProjectDetailPage() {
           </Card>
 
           {/* Drilldown Panel */}
-          {selectedDate && (
+          {drilldown.selectedDate && (
             <Card className="border-primary">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="flex items-center gap-2">
                       <Zap className="h-5 w-5" />
-                      {formatDate(selectedDate)} のセッション別トークン使用量
+                      {formatDate(drilldown.selectedDate)} のセッション別トークン使用量
                     </CardTitle>
                     <CardDescription>
                       セッションをクリックすると詳細ページに移動します
                     </CardDescription>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={closeDrilldown}>
+                  <Button variant="ghost" size="icon" onClick={drilldown.close}>
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                {dailyLoading && <LoadingSpinner />}
-                {!dailyLoading && dailyError && (
+                {drilldown.loading && <LoadingSpinner />}
+                {!drilldown.loading && drilldown.error && (
                   <div className="flex items-center justify-center py-8">
-                    <p className="text-sm text-destructive">{dailyError}</p>
+                    <p className="text-sm text-destructive">{drilldown.error}</p>
                   </div>
                 )}
-                {!dailyLoading && !dailyError && dailyStats && dailyStats.sessions.length > 0 && (
+                {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.sessions.length > 0 && (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -338,7 +268,7 @@ export default function ProjectDetailPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {dailyStats.sessions.map((session) => (
+                      {drilldown.data.sessions.map((session) => (
                         <TableRow key={session.id} className="cursor-pointer hover:bg-accent">
                           <TableCell className="font-medium">
                             <Link
@@ -372,7 +302,7 @@ export default function ProjectDetailPage() {
                     </TableBody>
                   </Table>
                 )}
-                {!dailyLoading && !dailyError && dailyStats && dailyStats.sessions.length === 0 && (
+                {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.sessions.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     この日のデータはありません
                   </div>

@@ -12,6 +12,7 @@
       "Bash(./bin/ccloganalysis:*)",
       "Bash(./server)",
       "Bash(.claude/skills/server-management/scripts/start-server.sh:*)",
+      "Bash(.claude/skills/server-management/scripts/status-server.sh:*)",
       "Bash(.claude/skills/server-management/scripts/stop-server.sh:*)",
       "Bash(DB_PATH=./bin/ccloganalysis.db ./bin/ccloganalysis:*)",
       "Bash(DB_PATH=./bin/ccloganalysis.db ./server:*)",
