@@ -271,3 +271,82 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 
 	return timeSeriesStats, nil
 }
+
+// GetProjectDailySessions retrieves sessions for a project on a specific date
+// date should be in "YYYY-MM-DD" format
+func (db *DB) GetProjectDailySessions(projectID int64, date string) ([]SessionRow, error) {
+	query := `
+		SELECT
+			id, project_id, git_branch, start_time, end_time, duration_seconds,
+			total_input_tokens, total_output_tokens,
+			total_cache_creation_tokens, total_cache_read_tokens,
+			error_count, first_user_message, created_at, updated_at
+		FROM sessions
+		WHERE project_id = ? AND DATE(start_time) = ?
+		ORDER BY start_time DESC
+	`
+
+	rows, err := db.conn.Query(query, projectID, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query project daily sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []SessionRow
+	for rows.Next() {
+		var s SessionRow
+		var startTimeStr, endTimeStr, createdAtStr, updatedAtStr string
+		var firstUserMsg sql.NullString
+
+		err := rows.Scan(
+			&s.ID,
+			&s.ProjectID,
+			&s.GitBranch,
+			&startTimeStr,
+			&endTimeStr,
+			&s.DurationSeconds,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalCacheCreationTokens,
+			&s.TotalCacheReadTokens,
+			&s.ErrorCount,
+			&firstUserMsg,
+			&createdAtStr,
+			&updatedAtStr,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session row: %w", err)
+		}
+
+		// 日時パース
+		s.StartTime, err = parseDateTime(startTimeStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse start time: %w", err)
+		}
+		s.EndTime, err = parseDateTime(endTimeStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse end time: %w", err)
+		}
+		s.CreatedAt, err = parseDateTime(createdAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse created at: %w", err)
+		}
+		s.UpdatedAt, err = parseDateTime(updatedAtStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse updated at: %w", err)
+		}
+
+		// FirstUserMessageのNULL処理
+		if firstUserMsg.Valid {
+			s.FirstUserMessage = firstUserMsg.String
+		}
+
+		sessions = append(sessions, s)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating session rows: %w", err)
+	}
+
+	return sessions, nil
+}

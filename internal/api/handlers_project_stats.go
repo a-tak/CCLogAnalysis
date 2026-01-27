@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 )
 
 // getProjectStatsHandler returns project-level statistics
@@ -12,21 +11,13 @@ func (h *Handler) getProjectStatsHandler(w http.ResponseWriter, r *http.Request)
 
 	projectName := r.PathValue("name")
 	if projectName == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error:   "bad_request",
-			Message: "project name is required",
-		})
+		writeJSONError(w, http.StatusBadRequest, "bad_request", "project name is required")
 		return
 	}
 
 	stats, err := h.service.GetProjectStats(projectName)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error:   "not_found",
-			Message: err.Error(),
-		})
+		writeJSONError(w, http.StatusNotFound, "not_found", err.Error())
 		return
 	}
 
@@ -39,46 +30,52 @@ func (h *Handler) getProjectTimelineHandler(w http.ResponseWriter, r *http.Reque
 
 	projectName := r.PathValue("name")
 	if projectName == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error:   "bad_request",
-			Message: "project name is required",
-		})
+		writeJSONError(w, http.StatusBadRequest, "bad_request", "project name is required")
 		return
 	}
 
-	// クエリパラメータ取得
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "day"
-	}
-
-	// periodのバリデーション
-	if period != "day" && period != "week" && period != "month" {
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error:   "bad_request",
-			Message: "period must be 'day', 'week', or 'month'",
-		})
+	period, err := parsePeriodParam(r)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
 
-	limit := 30
-	if limitStr := r.URL.Query().Get("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
-			limit = l
-		}
+	limit, err := parseLimitParam(r, 30)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
 	}
 
 	timeline, err := h.service.GetProjectTimeline(projectName, period, limit)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(ErrorResponse{
-			Error:   "not_found",
-			Message: err.Error(),
-		})
+		writeJSONError(w, http.StatusNotFound, "not_found", err.Error())
 		return
 	}
 
 	json.NewEncoder(w).Encode(timeline)
+}
+
+// getProjectDailyStatsHandler handles GET /api/projects/{name}/daily/{date}
+func (h *Handler) getProjectDailyStatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	projectName := r.PathValue("name")
+	if projectName == "" {
+		writeJSONError(w, http.StatusBadRequest, "bad_request", "project name is required")
+		return
+	}
+
+	date := r.PathValue("date")
+	if date == "" {
+		writeJSONError(w, http.StatusBadRequest, "bad_request", "date is required")
+		return
+	}
+
+	stats, err := h.service.GetProjectDailyStats(projectName, date)
+	if err != nil {
+		writeJSONError(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
 }

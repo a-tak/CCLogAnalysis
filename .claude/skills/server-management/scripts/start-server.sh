@@ -3,7 +3,24 @@
 set -e
 
 # パラメータ解析
-MODE="${1:-dev}"
+MODE="dev"
+FOREGROUND=false
+
+for arg in "$@"; do
+    case "$arg" in
+        dev|prod)
+            MODE="$arg"
+            ;;
+        --foreground|-f)
+            FOREGROUND=true
+            ;;
+        *)
+            echo "❌ 不正な引数: $arg"
+            echo "使用法: $0 [dev|prod] [--foreground|-f]"
+            exit 1
+            ;;
+    esac
+done
 
 # リポジトリルートを取得
 # スクリプト位置: investigate-session-pickup-issue/.claude/skills/server-management/scripts/
@@ -16,7 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 SKILL_DIR="$SCRIPT_DIR/.."
 PID_FILE="$SKILL_DIR/.server.pid"
-LOG_FILE="$SKILL_DIR/server.log"
+LOG_FILE="$REPO_ROOT/server.log"
 
 # 既存プロセスをチェック
 if [ -f "$PID_FILE" ]; then
@@ -87,37 +104,51 @@ case "$MODE" in
         ;;
 esac
 
-# サーバーをバックグラウンド起動
-"$REPO_ROOT/.server_bin" > "$LOG_FILE" 2>&1 &
-SERVER_PID=$!
+if [ "$FOREGROUND" = true ]; then
+    # フォアグラウンドで起動
+    echo "🚀 サーバーをフォアグラウンドで起動します..."
+    echo "📍 URL: http://localhost:$PORT"
+    echo "💡 Ctrl+C で停止できます"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-# PIDとポート番号を保存
-echo "$SERVER_PID:$PORT" > "$PID_FILE"
+    # サーバーを起動（フォアグラウンド）
+    exec "$REPO_ROOT/.server_bin"
+else
+    # バックグラウンドで起動
+    "$REPO_ROOT/.server_bin" > "$LOG_FILE" 2>&1 &
+    SERVER_PID=$!
 
-# ヘルスチェック（最大30秒待機）
-echo "⏳ サーバーのヘルスチェック中..."
-HEALTH_CHECK_COUNT=0
-MAX_ATTEMPTS=30
+    # PIDとポート番号を保存
+    echo "$SERVER_PID:$PORT" > "$PID_FILE"
 
-while [ $HEALTH_CHECK_COUNT -lt $MAX_ATTEMPTS ]; do
-    if curl -s "http://localhost:$PORT/api/health" > /dev/null 2>&1; then
-        echo "✅ サーバーが起動しました"
-        echo "📍 URL: http://localhost:$PORT"
-        echo "📝 ログファイル: $LOG_FILE"
-        exit 0
-    fi
+    # ヘルスチェック（最大30秒待機）
+    echo "⏳ サーバーのヘルスチェック中..."
+    HEALTH_CHECK_COUNT=0
+    MAX_ATTEMPTS=30
 
-    # プロセスが生きているかチェック
-    if ! kill -0 "$SERVER_PID" 2>/dev/null; then
-        echo "❌ サーバープロセスが異常終了しました"
-        cat "$LOG_FILE" | tail -20
-        exit 1
-    fi
+    while [ $HEALTH_CHECK_COUNT -lt $MAX_ATTEMPTS ]; do
+        if curl -s "http://localhost:$PORT/api/health" > /dev/null 2>&1; then
+            echo "✅ サーバーが起動しました"
+            echo "📍 URL: http://localhost:$PORT"
+            echo "📝 ログファイル: $LOG_FILE"
+            echo ""
+            echo "💡 状態確認: /server-management status"
+            echo "💡 停止: /server-management stop"
+            exit 0
+        fi
 
-    HEALTH_CHECK_COUNT=$((HEALTH_CHECK_COUNT + 1))
-    sleep 1
-done
+        # プロセスが生きているかチェック
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "❌ サーバープロセスが異常終了しました"
+            cat "$LOG_FILE" | tail -20
+            exit 1
+        fi
 
-echo "❌ ヘルスチェックがタイムアウトしました"
-kill "$SERVER_PID" 2>/dev/null || true
-exit 1
+        HEALTH_CHECK_COUNT=$((HEALTH_CHECK_COUNT + 1))
+        sleep 1
+    done
+
+    echo "❌ ヘルスチェックがタイムアウトしました"
+    kill "$SERVER_PID" 2>/dev/null || true
+    exit 1
+fi

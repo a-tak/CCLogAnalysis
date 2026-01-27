@@ -20,6 +20,18 @@ type GroupStats struct {
 	ErrorRate                float64   `json:"errorRate"`
 }
 
+// DailyProjectStats represents project-level statistics for a specific date
+type DailyProjectStats struct {
+	ProjectID                int64  `json:"projectId"`
+	ProjectName              string `json:"projectName"`
+	SessionCount             int    `json:"sessionCount"`
+	TotalInputTokens         int    `json:"totalInputTokens"`
+	TotalOutputTokens        int    `json:"totalOutputTokens"`
+	TotalCacheCreationTokens int    `json:"totalCacheCreationTokens"`
+	TotalCacheReadTokens     int    `json:"totalCacheReadTokens"`
+	TotalTokens              int    `json:"totalTokens"`
+}
+
 // GetGroupStats retrieves overall statistics for a project group
 func (db *DB) GetGroupStats(groupID int64) (*GroupStats, error) {
 	query := `
@@ -173,4 +185,61 @@ func (db *DB) GetGroupTimeSeriesStats(groupID int64, period string, limit int) (
 	}
 
 	return timeSeriesStats, nil
+}
+
+// GetGroupDailyProjectStats retrieves project-wise statistics for a group on a specific date
+// date should be in "YYYY-MM-DD" format
+func (db *DB) GetGroupDailyProjectStats(groupID int64, date string) ([]DailyProjectStats, error) {
+	query := `
+		SELECT
+			p.id as project_id,
+			p.name as project_name,
+			COUNT(s.id) as session_count,
+			COALESCE(SUM(s.total_input_tokens), 0) as total_input_tokens,
+			COALESCE(SUM(s.total_output_tokens), 0) as total_output_tokens,
+			COALESCE(SUM(s.total_cache_creation_tokens), 0) as total_cache_creation_tokens,
+			COALESCE(SUM(s.total_cache_read_tokens), 0) as total_cache_read_tokens
+		FROM project_group_mappings pgm
+		INNER JOIN projects p ON pgm.project_id = p.id
+		INNER JOIN sessions s ON p.id = s.project_id
+		WHERE pgm.group_id = ? AND DATE(s.start_time) = ?
+		GROUP BY p.id, p.name
+		HAVING session_count > 0
+		ORDER BY (total_input_tokens + total_output_tokens + total_cache_creation_tokens + total_cache_read_tokens) DESC
+	`
+
+	rows, err := db.conn.Query(query, groupID, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query group daily project stats: %w", err)
+	}
+	defer rows.Close()
+
+	var stats []DailyProjectStats
+	for rows.Next() {
+		var s DailyProjectStats
+		err := rows.Scan(
+			&s.ProjectID,
+			&s.ProjectName,
+			&s.SessionCount,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalCacheCreationTokens,
+			&s.TotalCacheReadTokens,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan daily project stats: %w", err)
+		}
+
+		// TotalTokensを計算
+		s.TotalTokens = s.TotalInputTokens + s.TotalOutputTokens +
+			s.TotalCacheCreationTokens + s.TotalCacheReadTokens
+
+		stats = append(stats, s)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating daily project stats: %w", err)
+	}
+
+	return stats, nil
 }

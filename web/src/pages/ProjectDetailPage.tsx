@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api/client'
-import type { SessionSummary } from '@/lib/api/types'
+import type { SessionSummary, ProjectDailyStatsResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Activity, Zap, TrendingUp, AlertCircle } from 'lucide-react'
+import { Activity, Zap, TrendingUp, AlertCircle, X, GitBranch } from 'lucide-react'
 import { SessionListTab } from '@/components/sessions/SessionListTab'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 import { useProjectDetailPolling } from '@/hooks/useProjectDetailPolling'
+import { useDrilldown } from '@/hooks/useDrilldown'
+import { DateBadgeSelector } from '@/components/charts/DateBadgeSelector'
+import { formatDate, formatNumber, formatPercent } from '@/lib/utils/formatters'
 
 export default function ProjectDetailPage() {
   const { name } = useParams<{ name: string }>()
@@ -21,6 +27,11 @@ export default function ProjectDetailPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('stats')
+
+  // Drilldown hook
+  const drilldown = useDrilldown<ProjectDailyStatsResponse>({
+    fetchData: (date) => api.getProjectDailyStats(name || '', date),
+  })
 
   useEffect(() => {
     if (!name || activeTab !== 'sessions') return
@@ -66,9 +77,6 @@ export default function ProjectDetailPage() {
       </div>
     )
   }
-
-  const formatNumber = (num: number) => num.toLocaleString('ja-JP')
-  const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
 
   return (
     <div className="container mx-auto py-8">
@@ -194,7 +202,96 @@ export default function ProjectDetailPage() {
                 </div>
               )}
             </CardContent>
+            <DateBadgeSelector
+              timeSeriesData={timeline?.data || []}
+              selectedDate={drilldown.selectedDate}
+              onDateClick={drilldown.handleDateClick}
+              period={period}
+              loading={loading}
+            />
           </Card>
+
+          {/* Drilldown Panel */}
+          {drilldown.selectedDate && (
+            <Card className="border-primary">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5" />
+                      {formatDate(drilldown.selectedDate)} のセッション別トークン使用量
+                    </CardTitle>
+                    <CardDescription>
+                      セッションをクリックすると詳細ページに移動します
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={drilldown.close}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {drilldown.loading && <LoadingSpinner />}
+                {!drilldown.loading && drilldown.error && (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-sm text-destructive">{drilldown.error}</p>
+                  </div>
+                )}
+                {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.sessions.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>セッションID</TableHead>
+                        <TableHead>ブランチ</TableHead>
+                        <TableHead>開始時刻</TableHead>
+                        <TableHead className="text-right">入力トークン</TableHead>
+                        <TableHead className="text-right">出力トークン</TableHead>
+                        <TableHead className="text-right">合計トークン</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {drilldown.data.sessions.map((session) => (
+                        <TableRow key={session.id} className="cursor-pointer hover:bg-accent">
+                          <TableCell className="font-medium">
+                            <Link
+                              to={`/projects/${encodeURIComponent(name!)}/sessions/${encodeURIComponent(session.id)}`}
+                              className="text-primary hover:underline flex items-center gap-2"
+                            >
+                              <Activity className="h-4 w-4" />
+                              {session.id.substring(0, 8)}...
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <GitBranch className="h-3 w-3" />
+                              {session.gitBranch}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {new Date(session.startTime).toLocaleTimeString('ja-JP')}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatNumber(session.totalInputTokens)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatNumber(session.totalOutputTokens)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatNumber(session.totalTokens)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {!drilldown.loading && !drilldown.error && drilldown.data && drilldown.data.sessions.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    この日のデータはありません
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Cache Statistics */}
           {(stats.totalCacheCreationTokens > 0 || stats.totalCacheReadTokens > 0) && (

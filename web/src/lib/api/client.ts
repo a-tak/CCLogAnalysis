@@ -13,6 +13,8 @@ import type {
   ScanStatus,
   TotalStats,
   DailyStatsResponse,
+  GroupDailyStatsResponse,
+  ProjectDailyStatsResponse,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
@@ -171,6 +173,18 @@ export const api = {
   // Get daily statistics by group (for drilldown)
   async getDailyStats(date: string): Promise<DailyStatsResponse> {
     return fetchApi<DailyStatsResponse>(`/stats/daily/${date}`)
+  },
+
+  // Get group daily statistics (project drilldown)
+  async getGroupDailyStats(groupId: number, date: string): Promise<GroupDailyStatsResponse> {
+    return fetchApi<GroupDailyStatsResponse>(`/groups/${groupId}/daily/${date}`)
+  },
+
+  // Get project daily statistics (session drilldown)
+  async getProjectDailyStats(projectName: string, date: string): Promise<ProjectDailyStatsResponse> {
+    return fetchApi<ProjectDailyStatsResponse>(
+      `/projects/${encodeURIComponent(projectName)}/daily/${date}`
+    )
   },
 }
 

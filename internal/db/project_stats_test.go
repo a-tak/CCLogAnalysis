@@ -325,3 +325,198 @@ func findBranchStats(stats []BranchStats, branch string) *BranchStats {
 	}
 	return nil
 }
+
+func TestGetProjectDailySessions(t *testing.T) {
+	// テストデータベースの準備
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	// テストプロジェクト作成
+	projectID, err := db.CreateProject("test-project", "/path/to/project")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// 異なる日付でセッションを作成
+	targetDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+	otherDate := time.Date(2026, 1, 26, 0, 0, 0, 0, time.UTC)
+
+	sessions := []struct {
+		id              string
+		branch          string
+		startTime       time.Time
+		endTime         time.Time
+		inputTokens     int
+		outputTokens    int
+		cacheCreate     int
+		cacheRead       int
+		errorCount      int
+		firstUserMsg    string
+	}{
+		// ターゲット日のセッション
+		{
+			id:           "session-1",
+			branch:       "main",
+			startTime:    targetDate.Add(10 * time.Hour),
+			endTime:      targetDate.Add(11 * time.Hour),
+			inputTokens:  1000,
+			outputTokens: 500,
+			cacheCreate:  100,
+			cacheRead:    50,
+			errorCount:   0,
+			firstUserMsg: "First message 1",
+		},
+		{
+			id:           "session-2",
+			branch:       "feature-a",
+			startTime:    targetDate.Add(14 * time.Hour),
+			endTime:      targetDate.Add(15 * time.Hour),
+			inputTokens:  1500,
+			outputTokens: 750,
+			cacheCreate:  150,
+			cacheRead:    75,
+			errorCount:   1,
+			firstUserMsg: "First message 2",
+		},
+		{
+			id:           "session-3",
+			branch:       "feature-b",
+			startTime:    targetDate.Add(16 * time.Hour),
+			endTime:      targetDate.Add(17 * time.Hour),
+			inputTokens:  2000,
+			outputTokens: 1000,
+			cacheCreate:  200,
+			cacheRead:    100,
+			errorCount:   0,
+			firstUserMsg: "First message 3",
+		},
+		// 他の日のセッション（フィルタされるべき）
+		{
+			id:           "session-4",
+			branch:       "main",
+			startTime:    otherDate.Add(10 * time.Hour),
+			endTime:      otherDate.Add(11 * time.Hour),
+			inputTokens:  999,
+			outputTokens: 999,
+			cacheCreate:  999,
+			cacheRead:    999,
+			errorCount:   0,
+			firstUserMsg: "Should not appear",
+		},
+	}
+
+	for _, s := range sessions {
+		duration := int(s.endTime.Sub(s.startTime).Seconds())
+		_, err := db.conn.Exec(`
+			INSERT INTO sessions (
+				id, project_id, git_branch, start_time, end_time, duration_seconds,
+				total_input_tokens, total_output_tokens,
+				total_cache_creation_tokens, total_cache_read_tokens,
+				error_count, first_user_message
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, s.id, projectID, s.branch,
+			s.startTime.Format(time.RFC3339Nano),
+			s.endTime.Format(time.RFC3339Nano),
+			duration,
+			s.inputTokens, s.outputTokens, s.cacheCreate, s.cacheRead, s.errorCount, s.firstUserMsg)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+	}
+
+	t.Run("指定日のセッション一覧を取得できる", func(t *testing.T) {
+		// ターゲット日のセッション取得
+		dateStr := targetDate.Format("2006-01-02")
+		sessionRows, err := db.GetProjectDailySessions(projectID, dateStr)
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 3セッション分のデータが返されることを確認
+		if len(sessionRows) != 3 {
+			t.Fatalf("Expected 3 sessions, got %d", len(sessionRows))
+		}
+
+		// 開始時刻降順（session-3 → session-2 → session-1）
+		// session-3
+		if sessionRows[0].ID != "session-3" {
+			t.Errorf("Expected session-3 first, got %s", sessionRows[0].ID)
+		}
+		if sessionRows[0].GitBranch != "feature-b" {
+			t.Errorf("Expected branch feature-b, got %s", sessionRows[0].GitBranch)
+		}
+		if sessionRows[0].TotalInputTokens != 2000 {
+			t.Errorf("Expected 2000 input tokens, got %d", sessionRows[0].TotalInputTokens)
+		}
+		if sessionRows[0].TotalOutputTokens != 1000 {
+			t.Errorf("Expected 1000 output tokens, got %d", sessionRows[0].TotalOutputTokens)
+		}
+		if sessionRows[0].TotalCacheCreationTokens != 200 {
+			t.Errorf("Expected 200 cache creation tokens, got %d", sessionRows[0].TotalCacheCreationTokens)
+		}
+		if sessionRows[0].TotalCacheReadTokens != 100 {
+			t.Errorf("Expected 100 cache read tokens, got %d", sessionRows[0].TotalCacheReadTokens)
+		}
+		if sessionRows[0].ErrorCount != 0 {
+			t.Errorf("Expected 0 errors, got %d", sessionRows[0].ErrorCount)
+		}
+		if sessionRows[0].FirstUserMessage != "First message 3" {
+			t.Errorf("Expected 'First message 3', got %s", sessionRows[0].FirstUserMessage)
+		}
+
+		// session-2
+		if sessionRows[1].ID != "session-2" {
+			t.Errorf("Expected session-2 second, got %s", sessionRows[1].ID)
+		}
+		if sessionRows[1].ErrorCount != 1 {
+			t.Errorf("Expected 1 error, got %d", sessionRows[1].ErrorCount)
+		}
+
+		// session-1
+		if sessionRows[2].ID != "session-1" {
+			t.Errorf("Expected session-1 third, got %s", sessionRows[2].ID)
+		}
+	})
+
+	t.Run("セッションが存在しない日付で空配列を返す", func(t *testing.T) {
+		// 存在しない日付
+		noSessionDate := "2026-01-27"
+		sessionRows, err := db.GetProjectDailySessions(projectID, noSessionDate)
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 空配列が返ることを確認
+		if len(sessionRows) != 0 {
+			t.Errorf("Expected 0 sessions, got %d", len(sessionRows))
+		}
+	})
+
+	t.Run("存在しないプロジェクトIDでエラーを返さず空配列を返す", func(t *testing.T) {
+		// 存在しないプロジェクトID
+		dateStr := targetDate.Format("2006-01-02")
+		sessionRows, err := db.GetProjectDailySessions(99999, dateStr)
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 空配列が返ることを確認
+		if len(sessionRows) != 0 {
+			t.Errorf("Expected 0 sessions, got %d", len(sessionRows))
+		}
+	})
+
+	t.Run("不正な日付フォーマットでも処理できる", func(t *testing.T) {
+		// SQLiteはDATE()関数でパースを試みるので、エラーにはならない可能性がある
+		// 空配列が返ることを確認
+		sessionRows, err := db.GetProjectDailySessions(projectID, "invalid-date")
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 空配列が返ることを確認
+		if len(sessionRows) != 0 {
+			t.Errorf("Expected 0 sessions, got %d", len(sessionRows))
+		}
+	})
+}
