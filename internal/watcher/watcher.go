@@ -115,7 +115,7 @@ func (w *FileWatcher) shouldSync() bool {
 
 // triggerSync executes incremental sync and updates lastSync time
 func (w *FileWatcher) triggerSync() error {
-	fmt.Println("File watcher: triggering sync...")
+	// DEBUGレベルでのみ表示（ログスパム削減のため）
 
 	result, err := db.SyncIncremental(w.db, w.parser)
 	if err != nil {

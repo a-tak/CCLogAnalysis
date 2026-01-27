@@ -221,7 +221,7 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 	result := &SyncResult{}
 	scanStartTime := time.Now()
 
-	log.Info("Starting SyncIncremental")
+	log.Debug("Starting SyncIncremental")
 
 	// プロジェクト一覧取得
 	projectNames, err := p.ListProjects()
@@ -229,7 +229,7 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
 
-	log.InfoWithContext("Projects found for incremental scan", map[string]interface{}{
+	log.DebugWithContext("Projects found for incremental scan", map[string]interface{}{
 		"count": len(projectNames),
 	})
 
@@ -476,11 +476,19 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 
 		result.ProjectsProcessed++
 
-		log.InfoWithContext("Project scan completed", map[string]interface{}{
-			"project":          projectName,
-			"sessions_synced":  result.SessionsSynced,
-			"sessions_skipped": result.SessionsSkipped,
-		})
+		// 変更があったプロジェクトのみINFOレベルでログ出力
+		if result.SessionsSynced > 0 {
+			log.InfoWithContext("Project scan completed", map[string]interface{}{
+				"project":          projectName,
+				"sessions_synced":  result.SessionsSynced,
+				"sessions_skipped": result.SessionsSkipped,
+			})
+		} else {
+			log.DebugWithContext("Project scan completed (no changes)", map[string]interface{}{
+				"project":          projectName,
+				"sessions_skipped": result.SessionsSkipped,
+			})
+		}
 	}
 
 	// 新規プロジェクトが検出された場合のみグループを同期
@@ -494,12 +502,20 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 		}
 	}
 
-	log.InfoWithContext("SyncIncremental completed", map[string]interface{}{
-		"projects_processed": result.ProjectsProcessed,
-		"sessions_synced":    result.SessionsSynced,
-		"sessions_skipped":   result.SessionsSkipped,
-		"errors":             result.ErrorCount,
-	})
+	// 変更があった場合のみINFOレベル、なければDEBUGレベルでログ出力
+	if result.SessionsSynced > 0 {
+		log.InfoWithContext("SyncIncremental completed", map[string]interface{}{
+			"projects_processed": result.ProjectsProcessed,
+			"sessions_synced":    result.SessionsSynced,
+			"sessions_skipped":   result.SessionsSkipped,
+			"errors":             result.ErrorCount,
+		})
+	} else {
+		log.DebugWithContext("SyncIncremental completed (no changes)", map[string]interface{}{
+			"projects_processed": result.ProjectsProcessed,
+			"sessions_skipped":   result.SessionsSkipped,
+		})
+	}
 
 	return result, nil
 }
