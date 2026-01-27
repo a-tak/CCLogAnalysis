@@ -321,24 +321,9 @@ func (s *DatabaseSessionService) GetProjectTimeline(projectName, period string, 
 		return nil, fmt.Errorf("failed to get timeline stats: %w", err)
 	}
 
-	// レスポンスに変換
-	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
-	for _, ts := range timeSeriesStats {
-		dataPoints = append(dataPoints, TimeSeriesDataPoint{
-			PeriodStart:              ts.PeriodStart,
-			PeriodEnd:                ts.PeriodEnd,
-			SessionCount:             ts.SessionCount,
-			TotalInputTokens:         ts.TotalInputTokens,
-			TotalOutputTokens:        ts.TotalOutputTokens,
-			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
-			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
-			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
-		})
-	}
-
 	return &TimeSeriesResponse{
 		Period: period,
-		Data:   dataPoints,
+		Data:   convertToTimeSeriesDataPoints(timeSeriesStats),
 	}, nil
 }
 
@@ -497,24 +482,9 @@ func (s *DatabaseSessionService) GetProjectGroupTimeline(groupID int64, period s
 		return nil, fmt.Errorf("failed to get group timeline stats: %w", err)
 	}
 
-	// レスポンスに変換
-	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
-	for _, ts := range timeSeriesStats {
-		dataPoints = append(dataPoints, TimeSeriesDataPoint{
-			PeriodStart:              ts.PeriodStart,
-			PeriodEnd:                ts.PeriodEnd,
-			SessionCount:             ts.SessionCount,
-			TotalInputTokens:         ts.TotalInputTokens,
-			TotalOutputTokens:        ts.TotalOutputTokens,
-			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
-			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
-			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
-		})
-	}
-
 	return &TimeSeriesResponse{
 		Period: period,
-		Data:   dataPoints,
+		Data:   convertToTimeSeriesDataPoints(timeSeriesStats),
 	}, nil
 }
 
@@ -559,24 +529,9 @@ func (s *DatabaseSessionService) GetTotalTimeline(period string, limit int) (*Ti
 		return nil, fmt.Errorf("failed to get total timeline stats: %w", err)
 	}
 
-	// レスポンスに変換
-	dataPoints := make([]TimeSeriesDataPoint, 0, len(timeSeriesStats))
-	for _, ts := range timeSeriesStats {
-		dataPoints = append(dataPoints, TimeSeriesDataPoint{
-			PeriodStart:              ts.PeriodStart,
-			PeriodEnd:                ts.PeriodEnd,
-			SessionCount:             ts.SessionCount,
-			TotalInputTokens:         ts.TotalInputTokens,
-			TotalOutputTokens:        ts.TotalOutputTokens,
-			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
-			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
-			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
-		})
-	}
-
 	return &TimeSeriesResponse{
 		Period: period,
-		Data:   dataPoints,
+		Data:   convertToTimeSeriesDataPoints(timeSeriesStats),
 	}, nil
 }
 
@@ -685,4 +640,22 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
 	}
 	return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+}
+
+// convertToTimeSeriesDataPoints converts db.TimeSeriesStats to api.TimeSeriesDataPoint
+func convertToTimeSeriesDataPoints(stats []db.TimeSeriesStats) []TimeSeriesDataPoint {
+	dataPoints := make([]TimeSeriesDataPoint, 0, len(stats))
+	for _, ts := range stats {
+		dataPoints = append(dataPoints, TimeSeriesDataPoint{
+			PeriodStart:              ts.PeriodStart,
+			PeriodEnd:                ts.PeriodEnd,
+			SessionCount:             ts.SessionCount,
+			TotalInputTokens:         ts.TotalInputTokens,
+			TotalOutputTokens:        ts.TotalOutputTokens,
+			TotalCacheCreationTokens: ts.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     ts.TotalCacheReadTokens,
+			TotalTokens:              ts.TotalInputTokens + ts.TotalOutputTokens,
+		})
+	}
+	return dataPoints
 }

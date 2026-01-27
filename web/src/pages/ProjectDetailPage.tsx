@@ -14,6 +14,7 @@ import { SessionListTab } from '@/components/sessions/SessionListTab'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 import { useProjectDetailPolling } from '@/hooks/useProjectDetailPolling'
 import { useDrilldown } from '@/hooks/useDrilldown'
+import { DateBadgeSelector } from '@/components/charts/DateBadgeSelector'
 import { formatDate, formatNumber, formatPercent } from '@/lib/utils/formatters'
 
 export default function ProjectDetailPage() {
@@ -201,32 +202,13 @@ export default function ProjectDetailPage() {
                 </div>
               )}
             </CardContent>
-            {period === 'day' && !loading && timeline && timeline.data.length > 0 && (
-              <CardContent className="pt-0">
-                <div className="text-sm text-muted-foreground mb-2">日付を選択してドリルダウン:</div>
-                <div className="flex flex-wrap gap-2">
-                  {[...timeline.data].reverse().map((item) => {
-                    const date = new Date(item.periodStart)
-                    const dateStr = date.toISOString().split('T')[0]
-                    const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
-                    const isSelected = drilldown.selectedDate === dateStr
-                    return (
-                      <button
-                        key={dateStr}
-                        type="button"
-                        onClick={() => drilldown.handleDateClick(dateStr)}
-                        className={isSelected ?
-                          "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer" :
-                          "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-border text-foreground cursor-pointer hover:bg-primary hover:text-primary-foreground"
-                        }
-                      >
-                        {displayDate}
-                      </button>
-                    )
-                  })}
-                </div>
-              </CardContent>
-            )}
+            <DateBadgeSelector
+              timeSeriesData={timeline?.data || []}
+              selectedDate={drilldown.selectedDate}
+              onDateClick={drilldown.handleDateClick}
+              period={period}
+              loading={loading}
+            />
           </Card>
 
           {/* Drilldown Panel */}

@@ -3,14 +3,13 @@ import { useParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { api, ApiError } from '@/lib/api/client'
 import type { SessionDetail } from '@/lib/api/types'
 import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
 import { ModelUsageChart } from '@/components/charts/ModelUsageChart'
 import { ConversationHistory } from '@/components/conversation/ConversationHistory'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
+import { PaginationControls } from '@/components/ui/pagination-controls'
 import { Calendar } from 'lucide-react'
 
 function formatDate(isoString: string): string {
@@ -374,36 +373,14 @@ export function SessionDetailPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* 上部ページングUI */}
-          {toolCallsTotalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {toolCallsStartIndex + 1} - {Math.min(toolCallsEndIndex, filteredToolCalls.length)} / {filteredToolCalls.length}件
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage - 1)}
-                  disabled={toolCallsCurrentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  前へ
-                </Button>
-                <span className="flex items-center px-4 text-sm text-muted-foreground">
-                  {toolCallsCurrentPage} / {toolCallsTotalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage + 1)}
-                  disabled={toolCallsCurrentPage === toolCallsTotalPages}
-                >
-                  次へ
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationControls
+            currentPage={toolCallsCurrentPage}
+            totalPages={toolCallsTotalPages}
+            onPageChange={setToolCallsCurrentPage}
+            startIndex={toolCallsStartIndex}
+            endIndex={toolCallsEndIndex}
+            totalItems={filteredToolCalls.length}
+          />
 
           {/* データ表示 */}
           <Table>
@@ -438,36 +415,14 @@ export function SessionDetailPage() {
           </Table>
 
           {/* 下部ページングUI */}
-          {toolCallsTotalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {toolCallsStartIndex + 1} - {Math.min(toolCallsEndIndex, filteredToolCalls.length)} / {filteredToolCalls.length}件
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage - 1)}
-                  disabled={toolCallsCurrentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  前へ
-                </Button>
-                <span className="flex items-center px-4 text-sm text-muted-foreground">
-                  {toolCallsCurrentPage} / {toolCallsTotalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setToolCallsCurrentPage(toolCallsCurrentPage + 1)}
-                  disabled={toolCallsCurrentPage === toolCallsTotalPages}
-                >
-                  次へ
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationControls
+            currentPage={toolCallsCurrentPage}
+            totalPages={toolCallsTotalPages}
+            onPageChange={setToolCallsCurrentPage}
+            startIndex={toolCallsStartIndex}
+            endIndex={toolCallsEndIndex}
+            totalItems={filteredToolCalls.length}
+          />
         </CardContent>
       </Card>
 
@@ -482,71 +437,27 @@ export function SessionDetailPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* 上部ページングUI */}
-          {messagesTotalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {messagesStartIndex + 1} - {Math.min(messagesEndIndex, filteredMessages.length)} / {filteredMessages.length}件
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessagesCurrentPage(messagesCurrentPage - 1)}
-                  disabled={messagesCurrentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  前へ
-                </Button>
-                <span className="flex items-center px-4 text-sm text-muted-foreground">
-                  {messagesCurrentPage} / {messagesTotalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessagesCurrentPage(messagesCurrentPage + 1)}
-                  disabled={messagesCurrentPage === messagesTotalPages}
-                >
-                  次へ
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationControls
+            currentPage={messagesCurrentPage}
+            totalPages={messagesTotalPages}
+            onPageChange={setMessagesCurrentPage}
+            startIndex={messagesStartIndex}
+            endIndex={messagesEndIndex}
+            totalItems={filteredMessages.length}
+          />
 
           {/* データ表示 */}
           <ConversationHistory messages={displayedMessages} />
 
           {/* 下部ページングUI */}
-          {messagesTotalPages > 1 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                {messagesStartIndex + 1} - {Math.min(messagesEndIndex, filteredMessages.length)} / {filteredMessages.length}件
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessagesCurrentPage(messagesCurrentPage - 1)}
-                  disabled={messagesCurrentPage === 1}
-                >
-                  <ChevronLeft className="h-4 w-4 mr-1" />
-                  前へ
-                </Button>
-                <span className="flex items-center px-4 text-sm text-muted-foreground">
-                  {messagesCurrentPage} / {messagesTotalPages}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setMessagesCurrentPage(messagesCurrentPage + 1)}
-                  disabled={messagesCurrentPage === messagesTotalPages}
-                >
-                  次へ
-                  <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
+          <PaginationControls
+            currentPage={messagesCurrentPage}
+            totalPages={messagesTotalPages}
+            onPageChange={setMessagesCurrentPage}
+            startIndex={messagesStartIndex}
+            endIndex={messagesEndIndex}
+            totalItems={filteredMessages.length}
+          />
         </CardContent>
       </Card>
     </div>
