@@ -66,10 +66,6 @@ cd C:\Users\{username}\.claude\projects\{project-name}
 - **必須**: すべての新機能は「テスト→実装→リファクタリング」のサイクルで開発
 - 詳細は `.claude/rules/general.md` を参照
 
-### プランファイル
-
-- 詳細は `.claude/rules/plans.md` を参照
-
 ### ドキュメント作成時
 
 - サンプルコードやログ例を記載する際は、必ず個人情報を一般化する

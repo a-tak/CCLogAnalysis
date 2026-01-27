@@ -12,14 +12,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { Activity, Zap, TrendingUp, AlertCircle, X, GitBranch } from 'lucide-react'
 import { SessionListTab } from '@/components/sessions/SessionListTab'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
+import { useProjectDetailPolling } from '@/hooks/useProjectDetailPolling'
 
 export default function ProjectDetailPage() {
   const { name } = useParams<{ name: string }>()
-  const [stats, setStats] = useState<ProjectStats | null>(null)
-  const [timeline, setTimeline] = useState<TimeSeriesResponse | null>(null)
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+
+  // 15秒ごとにポーリングしてデータを自動更新
+  const { stats, timeline, loading, error } = useProjectDetailPolling(name || '', period)
+
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('stats')
@@ -29,31 +30,6 @@ export default function ProjectDetailPage() {
   const [dailyStats, setDailyStats] = useState<ProjectDailyStatsResponse | null>(null)
   const [dailyLoading, setDailyLoading] = useState(false)
   const [dailyError, setDailyError] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (!name) return
-
-    const fetchData = async () => {
-      setLoading(true)
-      setError(null)
-
-      try {
-        const [statsData, timelineData] = await Promise.all([
-          api.getProjectStats(name),
-          api.getProjectTimeline(name, period, 30),
-        ])
-
-        setStats(statsData)
-        setTimeline(timelineData)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : '統計の取得に失敗しました')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [name, period])
 
   useEffect(() => {
     if (!name || activeTab !== 'sessions') return

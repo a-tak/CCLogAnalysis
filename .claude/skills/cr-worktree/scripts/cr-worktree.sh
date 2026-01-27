@@ -353,30 +353,56 @@ elif [[ "$ARG" =~ ^[a-zA-Z0-9/_-]+$ ]]; then
   # ワークツリーベースディレクトリ作成
   mkdir -p "$WORKTREE_BASE"
 
-  # 分岐元ブランチの決定
-  BASE_BRANCH="$MAIN_BRANCH"
-  if [ "$FROM_CURRENT" = true ]; then
-    CURRENT_BRANCH=$(git branch --show-current)
-    if [ -n "$CURRENT_BRANCH" ]; then
-      BASE_BRANCH="$CURRENT_BRANCH"
-      echo "📍 現在のブランチ ($CURRENT_BRANCH) から分岐します"
-      echo ""
-    else
-      echo "⚠️  現在のブランチを取得できませんでした。$MAIN_BRANCH から分岐します。"
-      echo ""
-    fi
-  fi
+  # リモートブランチの存在確認
+  echo "🔍 リモートブランチを確認中..."
+  if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
+    # リモートに同じ名前のブランチが存在する
+    echo "✅ リモートブランチ origin/$BRANCH_NAME が見つかりました"
+    echo "   リモートブランチをチェックアウトしてワークツリーを作成します"
+    echo ""
 
-  # ワークツリー作成
-  echo "🔧 ワークツリーを作成中..."
-  if ! git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_BRANCH"; then
-    echo "❌ エラー: ワークツリーの作成に失敗しました"
-    # 作成途中のディレクトリをクリーンアップ
-    if [ -d "$WORKTREE_PATH" ]; then
-      echo "   作成途中のディレクトリを削除中..."
-      rm -rf "$WORKTREE_PATH"
+    # 既存のリモートブランチをチェックアウト
+    echo "🔧 ワークツリーを作成中（既存ブランチ）..."
+    if ! git worktree add "$WORKTREE_PATH" "$BRANCH_NAME"; then
+      echo "❌ エラー: ワークツリーの作成に失敗しました"
+      if [ -d "$WORKTREE_PATH" ]; then
+        echo "   作成途中のディレクトリを削除中..."
+        rm -rf "$WORKTREE_PATH"
+      fi
+      exit 1
     fi
-    exit 1
+  else
+    # リモートにブランチが存在しない（新規作成）
+    echo "📌 リモートブランチが見つかりません。新規ブランチを作成します"
+    echo ""
+
+    # 分岐元ブランチの決定
+    BASE_BRANCH="origin/$MAIN_BRANCH"
+    if [ "$FROM_CURRENT" = true ]; then
+      CURRENT_BRANCH=$(git branch --show-current)
+      if [ -n "$CURRENT_BRANCH" ]; then
+        BASE_BRANCH="$CURRENT_BRANCH"
+        echo "📍 現在のブランチ ($CURRENT_BRANCH) から分岐します"
+        echo ""
+      else
+        echo "⚠️  現在のブランチを取得できませんでした。origin/$MAIN_BRANCH から分岐します。"
+        echo ""
+      fi
+    else
+      echo "📍 リモートブランチ (origin/$MAIN_BRANCH) から分岐します"
+      echo ""
+    fi
+
+    # 新規ブランチでワークツリー作成
+    echo "🔧 ワークツリーを作成中（新規ブランチ）..."
+    if ! git worktree add -b "$BRANCH_NAME" "$WORKTREE_PATH" "$BASE_BRANCH"; then
+      echo "❌ エラー: ワークツリーの作成に失敗しました"
+      if [ -d "$WORKTREE_PATH" ]; then
+        echo "   作成途中のディレクトリを削除中..."
+        rm -rf "$WORKTREE_PATH"
+      fi
+      exit 1
+    fi
   fi
   echo "✅ ワークツリー作成完了"
   echo ""
