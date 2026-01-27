@@ -101,7 +101,7 @@ export default function GroupDetailPage() {
           </div>
           <CardDescription>
             <div className="flex flex-col gap-1 mt-2">
-              <span className="text-sm">Git Root: {group.gitRoot}</span>
+              <span className="text-sm">Git Root: {group.gitRoot ? '設定済み' : '未設定'}</span>
               <span className="text-xs text-muted-foreground">
                 作成日: {formatDate(group.createdAt)} | 更新日: {formatDate(group.updatedAt)}
               </span>
