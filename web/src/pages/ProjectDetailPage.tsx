@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { api } from '@/lib/api/client'
-import type { ProjectStats, TimeSeriesResponse, SessionSummary } from '@/lib/api/types'
+import { useParams, Link } from 'react-router-dom'
+import { api, ApiError } from '@/lib/api/client'
+import type { ProjectStats, TimeSeriesResponse, SessionSummary, ProjectDailyStatsResponse } from '@/lib/api/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { Activity, Zap, TrendingUp, AlertCircle } from 'lucide-react'
+import { Activity, Zap, TrendingUp, AlertCircle, X, GitBranch } from 'lucide-react'
 import { SessionListTab } from '@/components/sessions/SessionListTab'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
 
@@ -20,6 +23,12 @@ export default function ProjectDetailPage() {
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('stats')
+
+  // Drilldown state
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [dailyStats, setDailyStats] = useState<ProjectDailyStatsResponse | null>(null)
+  const [dailyLoading, setDailyLoading] = useState(false)
+  const [dailyError, setDailyError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!name) return
@@ -63,6 +72,74 @@ export default function ProjectDetailPage() {
 
     fetchSessions()
   }, [name, activeTab])
+
+  // Fetch daily stats when date is selected
+  useEffect(() => {
+    if (!selectedDate || !name) {
+      setDailyStats(null)
+      return
+    }
+
+    const dateToFetch = selectedDate
+    const projectName = name
+
+    async function loadDailyStats() {
+      // 日付フォーマット検証
+      if (!isValidDateFormat(dateToFetch)) {
+        setDailyError('無効な日付フォーマットです')
+        setDailyStats(null)
+        return
+      }
+
+      try {
+        setDailyLoading(true)
+        setDailyError(null)
+        const stats = await api.getProjectDailyStats(projectName, dateToFetch)
+        setDailyStats(stats)
+      } catch (err) {
+        const errorMsg = err instanceof ApiError ? err.message : 'データの取得に失敗しました'
+        setDailyError(errorMsg)
+        setDailyStats(null)
+      } finally {
+        setDailyLoading(false)
+      }
+    }
+
+    loadDailyStats()
+  }, [selectedDate, name])
+
+  const isValidDateFormat = (dateStr: string): boolean => {
+    // YYYY-MM-DD 形式の検証
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/
+    if (!datePattern.test(dateStr)) {
+      return false
+    }
+    const date = new Date(dateStr)
+    return date instanceof Date && !isNaN(date.getTime())
+  }
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ja-JP', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  // Handle date badge click (toggle)
+  const handleDateClick = (dateStr: string) => {
+    if (selectedDate === dateStr) {
+      setSelectedDate(null)
+    } else {
+      setSelectedDate(dateStr)
+    }
+  }
+
+  const closeDrilldown = () => {
+    setSelectedDate(null)
+    setDailyStats(null)
+  }
 
   if (loading) {
     return (
@@ -218,7 +295,115 @@ export default function ProjectDetailPage() {
                 </div>
               )}
             </CardContent>
+            {period === 'day' && !loading && timeline && timeline.data.length > 0 && (
+              <CardContent className="pt-0">
+                <div className="text-sm text-muted-foreground mb-2">日付を選択してドリルダウン:</div>
+                <div className="flex flex-wrap gap-2">
+                  {[...timeline.data].reverse().map((item) => {
+                    const date = new Date(item.periodStart)
+                    const dateStr = date.toISOString().split('T')[0]
+                    const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
+                    const isSelected = selectedDate === dateStr
+                    return (
+                      <button
+                        key={dateStr}
+                        type="button"
+                        onClick={() => handleDateClick(dateStr)}
+                        className={isSelected ?
+                          "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer" :
+                          "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-border text-foreground cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                        }
+                      >
+                        {displayDate}
+                      </button>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            )}
           </Card>
+
+          {/* Drilldown Panel */}
+          {selectedDate && (
+            <Card className="border-primary">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5" />
+                      {formatDate(selectedDate)} のセッション別トークン使用量
+                    </CardTitle>
+                    <CardDescription>
+                      セッションをクリックすると詳細ページに移動します
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={closeDrilldown}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {dailyLoading && <LoadingSpinner />}
+                {!dailyLoading && dailyError && (
+                  <div className="flex items-center justify-center py-8">
+                    <p className="text-sm text-destructive">{dailyError}</p>
+                  </div>
+                )}
+                {!dailyLoading && !dailyError && dailyStats && dailyStats.sessions.length > 0 && (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>セッションID</TableHead>
+                        <TableHead>ブランチ</TableHead>
+                        <TableHead>開始時刻</TableHead>
+                        <TableHead className="text-right">入力トークン</TableHead>
+                        <TableHead className="text-right">出力トークン</TableHead>
+                        <TableHead className="text-right">合計トークン</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dailyStats.sessions.map((session) => (
+                        <TableRow key={session.id} className="cursor-pointer hover:bg-accent">
+                          <TableCell className="font-medium">
+                            <Link
+                              to={`/projects/${encodeURIComponent(name!)}/sessions/${encodeURIComponent(session.id)}`}
+                              className="text-primary hover:underline flex items-center gap-2"
+                            >
+                              <Activity className="h-4 w-4" />
+                              {session.id.substring(0, 8)}...
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="flex items-center gap-1">
+                              <GitBranch className="h-3 w-3" />
+                              {session.gitBranch}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {new Date(session.startTime).toLocaleTimeString('ja-JP')}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatNumber(session.totalInputTokens)}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatNumber(session.totalOutputTokens)}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {formatNumber(session.totalTokens)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {!dailyLoading && !dailyError && dailyStats && dailyStats.sessions.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    この日のデータはありません
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Cache Statistics */}
           {(stats.totalCacheCreationTokens > 0 || stats.totalCacheReadTokens > 0) && (

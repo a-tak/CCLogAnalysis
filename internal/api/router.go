@@ -121,6 +121,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/projects", h.listProjectsHandler)
 	mux.HandleFunc("GET /api/projects/{name}/stats", h.getProjectStatsHandler)
 	mux.HandleFunc("GET /api/projects/{name}/timeline", h.getProjectTimelineHandler)
+	mux.HandleFunc("GET /api/projects/{name}/daily/{date}", h.getProjectDailyStatsHandler)
 	mux.HandleFunc("GET /api/sessions", h.listSessionsHandler)
 	mux.HandleFunc("GET /api/sessions/{project}/{id}", h.getSessionHandler)
 	mux.HandleFunc("POST /api/analyze", h.analyzeHandler)
@@ -128,6 +129,7 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/groups/{id}", h.getGroupHandler)
 	mux.HandleFunc("GET /api/groups/{id}/stats", h.getGroupStatsHandler)
 	mux.HandleFunc("GET /api/groups/{id}/timeline", h.getGroupTimelineHandler)
+	mux.HandleFunc("GET /api/groups/{id}/daily/{date}", h.getGroupDailyStatsHandler)
 
 	// Total stats endpoints (all projects combined)
 	mux.HandleFunc("GET /api/stats/total", h.getTotalStatsHandler)

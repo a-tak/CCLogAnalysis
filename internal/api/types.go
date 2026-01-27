@@ -17,6 +17,8 @@ type SessionService interface {
 	GetTotalStats() (*TotalStatsResponse, error)
 	GetTotalTimeline(period string, limit int) (*TimeSeriesResponse, error)
 	GetDailyStats(date string) (*DailyStatsResponse, error)
+	GetGroupDailyStats(groupID int64, date string) (*GroupDailyStatsResponse, error)
+	GetProjectDailyStats(projectName string, date string) (*ProjectDailyStatsResponse, error)
 }
 
 // HealthResponse represents the health check response
@@ -249,4 +251,44 @@ type DailyGroupStatsResponse struct {
 type DailyStatsResponse struct {
 	Date   string                    `json:"date"`
 	Groups []DailyGroupStatsResponse `json:"groups"`
+}
+
+// DailyProjectStatsResponse represents project-wise statistics for a specific date
+type DailyProjectStatsResponse struct {
+	ProjectID                int64  `json:"projectId"`
+	ProjectName              string `json:"projectName"`
+	SessionCount             int    `json:"sessionCount"`
+	TotalInputTokens         int    `json:"totalInputTokens"`
+	TotalOutputTokens        int    `json:"totalOutputTokens"`
+	TotalCacheCreationTokens int    `json:"totalCacheCreationTokens"`
+	TotalCacheReadTokens     int    `json:"totalCacheReadTokens"`
+	TotalTokens              int    `json:"totalTokens"`
+}
+
+// GroupDailyStatsResponse represents the response for group daily statistics
+type GroupDailyStatsResponse struct {
+	Date     string                      `json:"date"`
+	Projects []DailyProjectStatsResponse `json:"projects"`
+}
+
+// DailySessionResponse represents a session for a specific date
+type DailySessionResponse struct {
+	ID                       string    `json:"id"`
+	GitBranch                string    `json:"gitBranch"`
+	StartTime                time.Time `json:"startTime"`
+	EndTime                  time.Time `json:"endTime"`
+	Duration                 string    `json:"duration"`
+	TotalInputTokens         int       `json:"totalInputTokens"`
+	TotalOutputTokens        int       `json:"totalOutputTokens"`
+	TotalCacheCreationTokens int       `json:"totalCacheCreationTokens"`
+	TotalCacheReadTokens     int       `json:"totalCacheReadTokens"`
+	TotalTokens              int       `json:"totalTokens"`
+	ErrorCount               int       `json:"errorCount"`
+	FirstUserMessage         string    `json:"firstUserMessage"`
+}
+
+// ProjectDailyStatsResponse represents the response for project daily statistics
+type ProjectDailyStatsResponse struct {
+	Date     string                 `json:"date"`
+	Sessions []DailySessionResponse `json:"sessions"`
 }

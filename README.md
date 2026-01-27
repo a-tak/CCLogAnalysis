@@ -142,11 +142,17 @@ make build
 Claude Code から以下のコマンドでサーバーを管理できます：
 
 ```bash
-# 開発モードで起動（初回同期スキップ）
+# 開発モードで起動（バックグラウンド）
 /server-management start dev
 
-# 本番モードで起動（初回同期実行）
+# 開発モードで起動（フォアグラウンド、別ターミナル推奨）
+/server-management start dev --foreground
+
+# 本番モードで起動
 /server-management start prod
+
+# サーバー状態確認
+/server-management status
 
 # サーバー停止
 /server-management stop
@@ -157,6 +163,13 @@ Claude Code から以下のコマンドでサーバーを管理できます：
 - PIDファイルによる確実なプロセス管理
 - Graceful shutdown対応
 - ビルド & 起動を自動実行
+- フォアグラウンドモード対応（別ターミナルで起動可能）
+- 状態確認コマンドで起動状態を簡単に確認
+
+**フォアグラウンドモード:**
+- ログが直接ターミナルに表示される
+- Ctrl+C で安全に停止できる
+- 別ターミナルでの実行を推奨
 
 #### 手動起動
 
@@ -210,15 +223,23 @@ cd web && npm run dev
 
 ### サーバー管理スクリプト
 
-Claude Codeからサーバーの起動・停止を簡単に行うためのスクリプトを提供しています。
+Claude Codeからサーバーの起動・停止・状態確認を簡単に行うためのスクリプトを提供しています。
 
 **起動:**
 ```bash
-# 開発モード（CORS有効、ファイル監視有効）
+# バックグラウンドモード（開発）
 .claude/skills/server-management/scripts/start-server.sh dev
 
-# 本番モード（ビルド後に起動）
+# フォアグラウンドモード（開発、別ターミナル推奨）
+.claude/skills/server-management/scripts/start-server.sh dev --foreground
+
+# 本番モード
 .claude/skills/server-management/scripts/start-server.sh prod
+```
+
+**状態確認:**
+```bash
+.claude/skills/server-management/scripts/status-server.sh
 ```
 
 **停止:**
@@ -226,7 +247,7 @@ Claude Codeからサーバーの起動・停止を簡単に行うためのスク
 .claude/skills/server-management/scripts/stop-server.sh
 ```
 
-**ログ確認:**
+**ログ確認（バックグラウンドモード時）:**
 ```bash
 tail -f .claude/skills/server-management/server.log
 ```

@@ -607,6 +607,75 @@ func (s *DatabaseSessionService) GetDailyStats(date string) (*DailyStatsResponse
 	}, nil
 }
 
+// GetGroupDailyStats retrieves project-wise statistics for a group on a specific date
+func (s *DatabaseSessionService) GetGroupDailyStats(groupID int64, date string) (*GroupDailyStatsResponse, error) {
+	// DB層からプロジェクト別統計を取得
+	stats, err := s.db.GetGroupDailyProjectStats(groupID, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group daily project stats: %w", err)
+	}
+
+	// APIレスポンスに変換
+	projects := make([]DailyProjectStatsResponse, 0, len(stats))
+	for _, p := range stats {
+		projects = append(projects, DailyProjectStatsResponse{
+			ProjectID:                p.ProjectID,
+			ProjectName:              p.ProjectName,
+			SessionCount:             p.SessionCount,
+			TotalInputTokens:         p.TotalInputTokens,
+			TotalOutputTokens:        p.TotalOutputTokens,
+			TotalCacheCreationTokens: p.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     p.TotalCacheReadTokens,
+			TotalTokens:              p.TotalTokens,
+		})
+	}
+
+	return &GroupDailyStatsResponse{
+		Date:     date,
+		Projects: projects,
+	}, nil
+}
+
+// GetProjectDailyStats retrieves session-wise statistics for a project on a specific date
+func (s *DatabaseSessionService) GetProjectDailyStats(projectName string, date string) (*ProjectDailyStatsResponse, error) {
+	// プロジェクト名からプロジェクトIDを取得
+	project, err := s.db.GetProjectByName(projectName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project: %w", err)
+	}
+
+	// DB層からセッション一覧を取得
+	sessionRows, err := s.db.GetProjectDailySessions(project.ID, date)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project daily sessions: %w", err)
+	}
+
+	// APIレスポンスに変換
+	sessions := make([]DailySessionResponse, 0, len(sessionRows))
+	for _, sr := range sessionRows {
+		duration := sr.EndTime.Sub(sr.StartTime)
+		sessions = append(sessions, DailySessionResponse{
+			ID:                       sr.ID,
+			GitBranch:                sr.GitBranch,
+			StartTime:                sr.StartTime,
+			EndTime:                  sr.EndTime,
+			Duration:                 formatDuration(duration),
+			TotalInputTokens:         sr.TotalInputTokens,
+			TotalOutputTokens:        sr.TotalOutputTokens,
+			TotalCacheCreationTokens: sr.TotalCacheCreationTokens,
+			TotalCacheReadTokens:     sr.TotalCacheReadTokens,
+			TotalTokens:              sr.TotalInputTokens + sr.TotalOutputTokens + sr.TotalCacheCreationTokens + sr.TotalCacheReadTokens,
+			ErrorCount:               sr.ErrorCount,
+			FirstUserMessage:         sr.FirstUserMessage,
+		})
+	}
+
+	return &ProjectDailyStatsResponse{
+		Date:     date,
+		Sessions: sessions,
+	}, nil
+}
+
 // formatDuration formats a duration as a human-readable string
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {

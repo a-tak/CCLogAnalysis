@@ -224,3 +224,41 @@ export interface DailyStatsResponse {
   date: string
   groups: DailyGroupStats[]
 }
+
+// Daily Project Statistics (for group drilldown)
+export interface DailyProjectStats {
+  projectId: number
+  projectName: string
+  sessionCount: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+}
+
+export interface GroupDailyStatsResponse {
+  date: string
+  projects: DailyProjectStats[]
+}
+
+// Daily Session Statistics (for project drilldown)
+export interface DailySession {
+  id: string
+  gitBranch: string
+  startTime: string
+  endTime: string
+  duration: string
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationTokens: number
+  totalCacheReadTokens: number
+  totalTokens: number
+  errorCount: number
+  firstUserMessage: string
+}
+
+export interface ProjectDailyStatsResponse {
+  date: string
+  sessions: DailySession[]
+}

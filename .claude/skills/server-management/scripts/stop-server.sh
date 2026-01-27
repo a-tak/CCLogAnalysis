@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # リポジトリルートを取得
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 PID_FILE="$REPO_ROOT/.claude/skills/server-management/.server.pid"
 
 # PIDファイルをチェック
@@ -45,19 +45,17 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     sleep 1
 done
 
-# 仍然起動している場合は強制終了
+# まだ起動している場合は強制終了（記録されたPIDのみ）
 if kill -0 "$PID" 2>/dev/null; then
-    echo "⚠️  タイムアウト、サーバーを強制終了します..."
+    echo "⚠️  タイムアウト、サーバーを強制終了します (PID: $PID)..."
     kill -KILL "$PID" 2>/dev/null || true
     sleep 1
-fi
 
-# ポートを使用している残存プロセスも確実に終了
-if [ -n "$PORT" ]; then
-    REMAINING_PIDS=$(lsof -Pi :$PORT -sTCP:LISTEN -t 2>/dev/null || echo "")
-    if [ -n "$REMAINING_PIDS" ]; then
-        echo "⚠️  ポート $PORT を使用しているプロセスを終了します..."
-        echo "$REMAINING_PIDS" | xargs kill -9 2>/dev/null || true
+    # 最終確認
+    if kill -0 "$PID" 2>/dev/null; then
+        echo "❌ サーバーの停止に失敗しました (PID: $PID)"
+        echo "⚠️  手動での確認が必要です"
+        exit 1
     fi
 fi
 

@@ -138,3 +138,44 @@ func (h *Handler) getGroupTimelineHandler(w http.ResponseWriter, r *http.Request
 
 	json.NewEncoder(w).Encode(timeline)
 }
+
+// getGroupDailyStatsHandler handles GET /api/groups/{id}/daily/{date}
+func (h *Handler) getGroupDailyStatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract group ID
+	groupIDStr := r.PathValue("id")
+	groupID, err := strconv.ParseInt(groupIDStr, 10, 64)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "invalid group id",
+		})
+		return
+	}
+
+	// Extract date
+	date := r.PathValue("date")
+	if date == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "date is required",
+		})
+		return
+	}
+
+	// Get daily stats
+	stats, err := h.service.GetGroupDailyStats(groupID, date)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "not_found",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}

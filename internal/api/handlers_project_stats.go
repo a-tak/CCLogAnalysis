@@ -82,3 +82,43 @@ func (h *Handler) getProjectTimelineHandler(w http.ResponseWriter, r *http.Reque
 
 	json.NewEncoder(w).Encode(timeline)
 }
+
+// getProjectDailyStatsHandler handles GET /api/projects/{name}/daily/{date}
+func (h *Handler) getProjectDailyStatsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	// Extract project name
+	projectName := r.PathValue("name")
+	if projectName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "project name is required",
+		})
+		return
+	}
+
+	// Extract date
+	date := r.PathValue("date")
+	if date == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "bad_request",
+			Message: "date is required",
+		})
+		return
+	}
+
+	// Get daily stats
+	stats, err := h.service.GetProjectDailyStats(projectName, date)
+	if err != nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(ErrorResponse{
+			Error:   "not_found",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	json.NewEncoder(w).Encode(stats)
+}

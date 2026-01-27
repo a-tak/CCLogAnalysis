@@ -111,9 +111,13 @@ export function ProjectsPage() {
   const formatNumber = (num: number) => num.toLocaleString('ja-JP')
   const formatPercent = (num: number) => (num * 100).toFixed(1) + '%'
 
-  // Handle date badge click
+  // Handle date badge click (toggle)
   const handleDateClick = (dateStr: string) => {
-    setSelectedDate(dateStr)
+    if (selectedDate === dateStr) {
+      setSelectedDate(null)
+    } else {
+      setSelectedDate(dateStr)
+    }
   }
 
   const closeDrilldown = () => {
@@ -253,14 +257,17 @@ export function ProjectsPage() {
                 const displayDate = `${date.getMonth() + 1}/${date.getDate()}`
                 const isSelected = selectedDate === dateStr
                 return (
-                  <Badge
+                  <button
                     key={dateStr}
-                    variant={isSelected ? 'default' : 'outline'}
-                    className="cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                    type="button"
                     onClick={() => handleDateClick(dateStr)}
+                    className={isSelected ?
+                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-primary text-primary-foreground hover:bg-primary/80 cursor-pointer" :
+                      "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-border text-foreground cursor-pointer hover:bg-primary hover:text-primary-foreground"
+                    }
                   >
                     {displayDate}
-                  </Badge>
+                  </button>
                 )
               })}
             </div>

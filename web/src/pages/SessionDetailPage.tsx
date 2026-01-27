@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api, ApiError } from '@/lib/api/client'
 import type { SessionDetail } from '@/lib/api/types'
 import { TokenBreakdownChart } from '@/components/charts/TokenBreakdownChart'
 import { ModelUsageChart } from '@/components/charts/ModelUsageChart'
 import { ConversationHistory } from '@/components/conversation/ConversationHistory'
 import { Breadcrumb } from '@/components/navigation/Breadcrumb'
+import { Calendar } from 'lucide-react'
 
 function formatDate(isoString: string): string {
   const date = new Date(isoString)
@@ -19,6 +21,9 @@ export function SessionDetailPage() {
   const [session, setSession] = useState<SessionDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Date filter state
+  const [selectedDateFilter, setSelectedDateFilter] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadSessionDetail() {
@@ -59,6 +64,47 @@ export function SessionDetailPage() {
     }
     return items
   }
+
+  // Generate available dates from session data
+  const availableDates = useMemo(() => {
+    if (!session) return []
+
+    const dates = new Set<string>()
+
+    // Extract dates from tool calls
+    session.toolCalls.forEach((call) => {
+      const date = new Date(call.timestamp).toISOString().split('T')[0]
+      dates.add(date)
+    })
+
+    // Extract dates from messages
+    session.messages.forEach((msg) => {
+      const date = new Date(msg.timestamp).toISOString().split('T')[0]
+      dates.add(date)
+    })
+
+    return Array.from(dates).sort().reverse() // 降順
+  }, [session])
+
+  // Filter tool calls by date
+  const filteredToolCalls = useMemo(() => {
+    if (!session || !selectedDateFilter) return session?.toolCalls || []
+
+    return session.toolCalls.filter((call) => {
+      const callDate = new Date(call.timestamp).toISOString().split('T')[0]
+      return callDate === selectedDateFilter
+    })
+  }, [session, selectedDateFilter])
+
+  // Filter messages by date
+  const filteredMessages = useMemo(() => {
+    if (!session || !selectedDateFilter) return session?.messages || []
+
+    return session.messages.filter((msg) => {
+      const msgDate = new Date(msg.timestamp).toISOString().split('T')[0]
+      return msgDate === selectedDateFilter
+    })
+  }, [session, selectedDateFilter])
 
   if (loading) {
     return (
@@ -142,6 +188,52 @@ export function SessionDetailPage() {
           </dl>
         </CardContent>
       </Card>
+
+      {/* Date Filter */}
+      {availableDates.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              日付フィルタ
+            </CardTitle>
+            <CardDescription>
+              特定の日付のデータのみを表示できます
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select
+              value={selectedDateFilter || 'all'}
+              onValueChange={(value: string) => setSelectedDateFilter(value === 'all' ? null : value)}
+            >
+              <SelectTrigger className="w-full md:w-[300px]">
+                <SelectValue placeholder="すべての日付" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">すべての日付</SelectItem>
+                {availableDates.map((date) => {
+                  const dateObj = new Date(date)
+                  const displayDate = dateObj.toLocaleDateString('ja-JP', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })
+                  return (
+                    <SelectItem key={date} value={date}>
+                      {displayDate}
+                    </SelectItem>
+                  )
+                })}
+              </SelectContent>
+            </Select>
+            {selectedDateFilter && (
+              <p className="text-sm text-muted-foreground mt-2">
+                フィルタ適用中: {new Date(selectedDateFilter).toLocaleDateString('ja-JP')}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Token Summary */}
       <div className="grid gap-4 md:grid-cols-2">
@@ -247,7 +339,10 @@ export function SessionDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Tool Calls</CardTitle>
-          <CardDescription>{session.toolCalls.length} tool calls</CardDescription>
+          <CardDescription>
+            {filteredToolCalls.length} tool calls
+            {selectedDateFilter && ` (filtered from ${session.toolCalls.length})`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -260,7 +355,7 @@ export function SessionDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {session.toolCalls.slice(0, 20).map((call, index) => (
+              {filteredToolCalls.slice(0, 20).map((call, index) => (
                 <TableRow key={index}>
                   <TableCell className="text-muted-foreground">
                     {formatDate(call.timestamp)}
@@ -280,9 +375,9 @@ export function SessionDetailPage() {
               ))}
             </TableBody>
           </Table>
-          {session.toolCalls.length > 20 && (
+          {filteredToolCalls.length > 20 && (
             <p className="mt-4 text-sm text-muted-foreground">
-              Showing 20 of {session.toolCalls.length} tool calls
+              Showing 20 of {filteredToolCalls.length} tool calls
             </p>
           )}
         </CardContent>
@@ -292,13 +387,16 @@ export function SessionDetailPage() {
       <Card>
         <CardHeader>
           <CardTitle>Conversation History</CardTitle>
-          <CardDescription>{session.messages.length} messages</CardDescription>
+          <CardDescription>
+            {filteredMessages.length} messages
+            {selectedDateFilter && ` (filtered from ${session.messages.length})`}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ConversationHistory messages={session.messages.slice(0, 50)} />
-          {session.messages.length > 50 && (
+          <ConversationHistory messages={filteredMessages.slice(0, 50)} />
+          {filteredMessages.length > 50 && (
             <p className="mt-4 text-sm text-muted-foreground">
-              Showing 50 of {session.messages.length} messages
+              Showing 50 of {filteredMessages.length} messages
             </p>
           )}
         </CardContent>

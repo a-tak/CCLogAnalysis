@@ -28,6 +28,8 @@ type MockSessionService struct {
 	TotalStats           *TotalStatsResponse
 	TotalTimeline        *TimeSeriesResponse
 	DailyStats           *DailyStatsResponse
+	GroupDailyStats      *GroupDailyStatsResponse
+	ProjectDailyStats    *ProjectDailyStatsResponse
 	ShouldError          bool
 	err                  error
 }
@@ -121,6 +123,20 @@ func (m *MockSessionService) GetDailyStats(date string) (*DailyStatsResponse, er
 		return nil, m.err
 	}
 	return m.DailyStats, nil
+}
+
+func (m *MockSessionService) GetGroupDailyStats(groupID int64, date string) (*GroupDailyStatsResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.GroupDailyStats, nil
+}
+
+func (m *MockSessionService) GetProjectDailyStats(projectName string, date string) (*ProjectDailyStatsResponse, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.ProjectDailyStats, nil
 }
 
 func TestHealthHandler(t *testing.T) {
