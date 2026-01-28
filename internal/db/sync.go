@@ -445,7 +445,7 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 						continue
 					}
 
-					log.InfoWithContext("Session updated", map[string]interface{}{
+					log.DebugWithContext("Session updated", map[string]interface{}{
 						"project":    projectName,
 						"session_id": info.SessionID,
 					})
