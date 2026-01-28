@@ -3,21 +3,29 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/db"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 )
 
 // DebugStatusResponse represents the response for debug status endpoint
 type DebugStatusResponse struct {
-	DBProjects int    `json:"db_projects"`
-	DBSessions int    `json:"db_sessions"`
-	FSProjects int    `json:"fs_projects"`
-	SyncStatus string `json:"sync_status"`
-	SyncError  string `json:"sync_error,omitempty"`
+	DBProjects        int        `json:"db_projects"`
+	DBSessions        int        `json:"db_sessions"`
+	FSProjects        int        `json:"fs_projects"`
+	SyncStatus        string     `json:"sync_status"`
+	SyncError         string     `json:"sync_error,omitempty"`
+	ScanStatus        string     `json:"scan_status"`
+	ProjectsProcessed int        `json:"projects_processed"`
+	SessionsSynced    int        `json:"sessions_synced"`
+	SessionsSkipped   int        `json:"sessions_skipped"`
+	ScanStartedAt     *time.Time `json:"scan_started_at,omitempty"`
+	ScanCompletedAt   *time.Time `json:"scan_completed_at,omitempty"`
 }
 
 // DebugStatusHandler returns a handler for the debug status endpoint
-func DebugStatusHandler(service *DatabaseSessionService) http.HandlerFunc {
+func DebugStatusHandler(service *DatabaseSessionService, scanManager *scanner.ScanManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// DBからプロジェクト数を取得
 		projects, err := service.db.ListProjects()
@@ -53,13 +61,22 @@ func DebugStatusHandler(service *DatabaseSessionService) http.HandlerFunc {
 			syncStatus = "success"
 		}
 
+		// スキャンマネージャーの進捗を取得
+		progress := scanManager.GetProgress()
+
 		// レスポンスを作成
 		response := DebugStatusResponse{
-			DBProjects: dbProjects,
-			DBSessions: dbSessions,
-			FSProjects: fsProjects,
-			SyncStatus: syncStatus,
-			SyncError:  syncError,
+			DBProjects:        dbProjects,
+			DBSessions:        dbSessions,
+			FSProjects:        fsProjects,
+			SyncStatus:        syncStatus,
+			SyncError:         syncError,
+			ScanStatus:        string(progress.Status),
+			ProjectsProcessed: progress.ProjectsProcessed,
+			SessionsSynced:    progress.SessionsSynced,
+			SessionsSkipped:   progress.SessionsSkipped,
+			ScanStartedAt:     &progress.StartedAt,
+			ScanCompletedAt:   progress.CompletedAt,
 		}
 
 		// JSONレスポンスを返す

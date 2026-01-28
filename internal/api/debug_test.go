@@ -11,6 +11,7 @@ import (
 
 	"github.com/a-tak/ccloganalysis/internal/db"
 	"github.com/a-tak/ccloganalysis/internal/parser"
+	"github.com/a-tak/ccloganalysis/internal/scanner"
 	_ "modernc.org/sqlite"
 )
 
@@ -50,12 +51,15 @@ func TestDebugStatusHandler(t *testing.T) {
 			t.Fatalf("Failed to create project: %v", err)
 		}
 
+		// モックScanManagerを作成
+		scanManager := scanner.NewScanManager(database, p)
+
 		// HTTPリクエストを作成
 		req := httptest.NewRequest(http.MethodGet, "/api/debug/status", nil)
 		rec := httptest.NewRecorder()
 
 		// ハンドラーを実行
-		handler := DebugStatusHandler(service)
+		handler := DebugStatusHandler(service, scanManager)
 		handler.ServeHTTP(rec, req)
 
 		// ステータスコードを確認
@@ -106,12 +110,15 @@ func TestDebugStatusHandler(t *testing.T) {
 			syncError: errors.New("test sync error"),
 		}
 
+		// モックScanManagerを作成
+		scanManager := scanner.NewScanManager(database, p)
+
 		// HTTPリクエストを作成
 		req := httptest.NewRequest(http.MethodGet, "/api/debug/status", nil)
 		rec := httptest.NewRecorder()
 
 		// ハンドラーを実行
-		handler := DebugStatusHandler(service)
+		handler := DebugStatusHandler(service, scanManager)
 		handler.ServeHTTP(rec, req)
 
 		// ステータスコードを確認
@@ -154,12 +161,15 @@ func TestDebugStatusHandler(t *testing.T) {
 			parser: nil,
 		}
 
+		// モックScanManagerを作成（parserはnil）
+		scanManager := scanner.NewScanManager(database, nil)
+
 		// HTTPリクエストを作成
 		req := httptest.NewRequest(http.MethodGet, "/api/debug/status", nil)
 		rec := httptest.NewRecorder()
 
 		// ハンドラーを実行
-		handler := DebugStatusHandler(service)
+		handler := DebugStatusHandler(service, scanManager)
 		handler.ServeHTTP(rec, req)
 
 		// ステータスコードを確認

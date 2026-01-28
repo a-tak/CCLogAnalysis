@@ -140,8 +140,8 @@ func (h *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/scan/status", h.getScanStatusHandler)
 
 	// Debug endpoint (only available when using DatabaseSessionService)
-	if h.dbService != nil {
-		mux.HandleFunc("GET /api/debug/status", DebugStatusHandler(h.dbService))
+	if h.dbService != nil && h.scanManager != nil {
+		mux.HandleFunc("GET /api/debug/status", DebugStatusHandler(h.dbService, h.scanManager))
 		mux.HandleFunc("POST /api/debug/sync", DebugSyncHandler(h.dbService))
 	}
 
