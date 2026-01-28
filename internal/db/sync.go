@@ -186,25 +186,38 @@ func SyncProjectWithLogger(db *DB, p *parser.Parser, projectName string, log *lo
 }
 
 // shouldSyncSession determines if a session should be synced based on file modification time
-func shouldSyncSession(sessionID string, fileModTime time.Time, lastScanTime *time.Time, database *DB) (bool, error) {
-	// DBに保存されているfile_mod_timeを取得
-	dbModTime, err := database.GetSessionFileModTime(sessionID)
-	if err != nil {
-		// セッションが存在しない → 新規なので同期する
+func shouldSyncSession(sessionID string, fileModTime time.Time, lastScanTime *time.Time, database *DB, log *logger.Logger) (bool, error) {
+	// lastScanTimeとファイルModTimeを直接比較する
+	// （ファイル名とDBのセッションID（UUID）が異なるため、DBでの検索は使えない）
+
+	if lastScanTime == nil {
+		// 初回スキャン直後など、lastScanTimeがない場合は全て同期
+		log.DebugWithContext("No last scan time, will sync", map[string]interface{}{
+			"session_id": sessionID,
+		})
 		return true, nil
 	}
 
-	// 既に存在する場合：DBに保存されているfile_mod_timeと比較
 	// 時刻の精度を秒単位に揃える（ファイルシステムとDBの精度の違いを吸収）
 	fileModTimeTrunc := fileModTime.Truncate(time.Second)
-	dbModTimeTrunc := dbModTime.Truncate(time.Second)
+	lastScanTimeTrunc := lastScanTime.Truncate(time.Second)
 
-	if fileModTimeTrunc.After(dbModTimeTrunc) {
-		// ファイルがDBのfile_mod_timeより新しい → 同期する
+	if fileModTimeTrunc.After(lastScanTimeTrunc) {
+		// ファイルが前回スキャン後に更新された → 同期する
+		log.DebugWithContext("File modified after last scan, will sync", map[string]interface{}{
+			"session_id":     sessionID,
+			"file_mod_time":  fileModTimeTrunc,
+			"last_scan_time": lastScanTimeTrunc,
+		})
 		return true, nil
 	}
 
-	// それ以外（ファイルが更新されていない） → スキップ
+	// ファイルが前回スキャン前 → スキップ
+	log.DebugWithContext("File not modified since last scan, will skip", map[string]interface{}{
+		"session_id":     sessionID,
+		"file_mod_time":  fileModTimeTrunc,
+		"last_scan_time": lastScanTimeTrunc,
+	})
 	return false, nil
 }
 
@@ -383,7 +396,7 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 
 		for _, info := range sessionInfos {
 			// スキャン対象か判定
-			shouldSync, err := shouldSyncSession(info.SessionID, info.ModTime, lastScanTime, database)
+			shouldSync, err := shouldSyncSession(info.SessionID, info.ModTime, lastScanTime, database, log)
 			if err != nil {
 				log.ErrorWithContext("Failed to check sync status", map[string]interface{}{
 					"project":    projectName,
@@ -396,10 +409,6 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 
 			if !shouldSync {
 				result.SessionsSkipped++
-				log.DebugWithContext("Skipping unchanged session", map[string]interface{}{
-					"project":    projectName,
-					"session_id": info.SessionID,
-				})
 				continue
 			}
 
@@ -696,7 +705,7 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		if err != nil {
 			// UNIQUE制約エラーの場合は、既に別のプロジェクトで登録済みとしてスキップ
 			if isUniqueConstraintError(err) {
-				log.WarnWithContext("Session already exists (duplicate), skipping", map[string]interface{}{
+				log.DebugWithContext("Session already exists (duplicate), skipping", map[string]interface{}{
 					"project":       projectName,
 					"session_id":    info.SessionID,
 					"error_message": err.Error(),
