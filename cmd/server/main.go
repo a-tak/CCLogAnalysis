@@ -131,8 +131,8 @@ func main() {
 	case <-sigCh:
 		fmt.Println("\nShutting down gracefully...")
 
-		// Create shutdown context with timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Create shutdown context with timeout (shorter for faster shutdown)
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 
 		// Shutdown HTTP server gracefully
@@ -140,7 +140,7 @@ func main() {
 			log.Printf("Server shutdown error: %v", err)
 		}
 
-		// Stop scan manager
+		// Stop scan manager (max 5 seconds)
 		if scanManager != nil {
 			scanManager.Stop()
 		}

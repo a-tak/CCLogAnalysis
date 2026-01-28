@@ -679,3 +679,17 @@ func (db *DB) UpdateSession(session *parser.Session, projectName string, fileMod
 
 	return nil
 }
+
+// GetSessionFileModTime retrieves only the file_mod_time for a given session
+func (db *DB) GetSessionFileModTime(sessionID string) (*time.Time, error) {
+	var fileModTime time.Time
+	query := `SELECT file_mod_time FROM sessions WHERE id = ?`
+	err := db.conn.QueryRow(query, sessionID).Scan(&fileModTime)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to query file_mod_time: %w", err)
+	}
+	return &fileModTime, nil
+}

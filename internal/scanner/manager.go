@@ -107,8 +107,20 @@ func (m *ScanManager) Stop() {
 	}
 	m.mu.Unlock()
 
-	// スキャンの完了を待つ
-	m.wg.Wait()
+	// スキャンの完了を待つ（最大5秒）
+	done := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// スキャンが正常に完了
+	case <-time.After(5 * time.Second):
+		// タイムアウト：スキャンを強制終了
+		// （contextキャンセル済みなので、goroutineは自然終了する）
+	}
 }
 
 // runScan executes the scan operation (runs in goroutine)

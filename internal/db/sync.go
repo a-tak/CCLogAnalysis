@@ -187,26 +187,24 @@ func SyncProjectWithLogger(db *DB, p *parser.Parser, projectName string, log *lo
 
 // shouldSyncSession determines if a session should be synced based on file modification time
 func shouldSyncSession(sessionID string, fileModTime time.Time, lastScanTime *time.Time, database *DB) (bool, error) {
-	// DBに既に存在するかチェック
-	_, err := database.GetSession(sessionID)
+	// DBに保存されているfile_mod_timeを取得
+	dbModTime, err := database.GetSessionFileModTime(sessionID)
 	if err != nil {
 		// セッションが存在しない → 新規なので同期する
 		return true, nil
 	}
 
-	// 既に存在する場合
-	if lastScanTime == nil {
-		// 初回スキャンではない（セッションが既に存在する） → スキップ
-		return false, nil
-	}
+	// 既に存在する場合：DBに保存されているfile_mod_timeと比較
+	// 時刻の精度を秒単位に揃える（ファイルシステムとDBの精度の違いを吸収）
+	fileModTimeTrunc := fileModTime.Truncate(time.Second)
+	dbModTimeTrunc := dbModTime.Truncate(time.Second)
 
-	// ファイルが前回スキャン後に更新されているかチェック
-	if fileModTime.After(*lastScanTime) {
-		// ファイルが前回スキャン後に更新されている → 同期する
+	if fileModTimeTrunc.After(dbModTimeTrunc) {
+		// ファイルがDBのfile_mod_timeより新しい → 同期する
 		return true, nil
 	}
 
-	// それ以外 → スキップ
+	// それ以外（ファイルが更新されていない） → スキップ
 	return false, nil
 }
 
