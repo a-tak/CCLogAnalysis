@@ -24,6 +24,22 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
   })
   const pageSize = 20
 
+  // ハンドラ関数
+  function handleDateChange(field: keyof DateRangeFilter) {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      setDateFilter(prev => ({
+        ...prev,
+        [field]: e.target.value || null
+      }))
+      setCurrentPage(1)
+    }
+  }
+
+  function handleClearFilter(): void {
+    setDateFilter({ startDate: null, endDate: null })
+    setCurrentPage(1)
+  }
+
   // フィルタリング
   const filteredSessions = useMemo(() => {
     return sessions.filter(session => {
@@ -80,10 +96,7 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setDateFilter({ startDate: null, endDate: null })
-                  setCurrentPage(1)
-                }}
+                onClick={handleClearFilter}
               >
                 クリア
               </Button>
@@ -98,26 +111,14 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
                 <input
                   type="date"
                   value={dateFilter.startDate || ''}
-                  onChange={(e) => {
-                    setDateFilter({
-                      ...dateFilter,
-                      startDate: e.target.value || null
-                    })
-                    setCurrentPage(1)
-                  }}
+                  onChange={handleDateChange('startDate')}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
                 <span className="text-muted-foreground">～</span>
                 <input
                   type="date"
                   value={dateFilter.endDate || ''}
-                  onChange={(e) => {
-                    setDateFilter({
-                      ...dateFilter,
-                      endDate: e.target.value || null
-                    })
-                    setCurrentPage(1)
-                  }}
+                  onChange={handleDateChange('endDate')}
                   className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
               </div>

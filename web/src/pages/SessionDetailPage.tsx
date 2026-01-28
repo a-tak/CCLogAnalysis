@@ -69,7 +69,6 @@ export function SessionDetailPage() {
     return items
   }
 
-
   // 会話履歴のページング計算
   const messagesTotalPages = Math.ceil((session?.messages.length || 0) / messagesPageSize)
   const messagesStartIndex = (messagesCurrentPage - 1) * messagesPageSize
