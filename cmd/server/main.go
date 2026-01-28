@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/a-tak/ccloganalysis/internal/api"
 	"github.com/a-tak/ccloganalysis/internal/db"
@@ -105,6 +106,12 @@ func main() {
 	handler := api.NewHandler(service, scanManager)
 	router := handler.Routes()
 
+	// Setup HTTP server with graceful shutdown support
+	server := &http.Server{
+		Addr:    ":" + port,
+		Handler: router,
+	}
+
 	// Setup graceful shutdown
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
@@ -112,7 +119,7 @@ func main() {
 	// Start HTTP server in goroutine
 	serverErrors := make(chan error, 1)
 	go func() {
-		if err := http.ListenAndServe(":"+port, router); err != nil && err != http.ErrServerClosed {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			serverErrors <- err
 		}
 	}()
@@ -123,6 +130,15 @@ func main() {
 		log.Fatalf("Server error: %v", err)
 	case <-sigCh:
 		fmt.Println("\nShutting down gracefully...")
+
+		// Create shutdown context with timeout
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		// Shutdown HTTP server gracefully
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Server shutdown error: %v", err)
+		}
 
 		// Stop scan manager
 		if scanManager != nil {
