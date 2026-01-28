@@ -734,6 +734,17 @@ func syncProjectInternalWithLogger(db *DB, p *parser.Parser, projectName string,
 		result.SessionsSynced++
 	}
 
+	// プロジェクトの最終スキャン時刻を更新
+	scanStartTime := time.Now()
+	err = db.UpdateProjectLastScanTime(project.ID, scanStartTime)
+	if err != nil {
+		log.WarnWithContext("Failed to update last scan time", map[string]interface{}{
+			"project": projectName,
+			"error":   err.Error(),
+		})
+		// 警告だけでエラーカウントはしない
+	}
+
 	return result, nil
 }
 
