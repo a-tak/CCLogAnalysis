@@ -27,7 +27,14 @@ type DB struct {
 
 // NewDB creates a new database connection and initializes the schema
 func NewDB(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite", dbPath)
+	// SQLiteの接続設定をDSNに指定
+	// ?cache=shared: 接続間でキャッシュを共有
+	// &mode=rwc: 読み書きモード（ファイルが存在しなければ作成）
+	// &_pragma=busy_timeout=5000: ビジーな状態で5秒まで待機
+	// &_pragma=journal_mode=WAL: Write-Ahead Loggingモード（書き込みスケーラビリティ向上）
+	dsn := dbPath + "?cache=shared&mode=rwc&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+
+	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
