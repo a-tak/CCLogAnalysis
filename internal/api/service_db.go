@@ -28,27 +28,8 @@ func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessi
 	}
 
 	// Note: Initial sync is now handled by ScanManager in main.go
-	// autoSyncIfNeeded is no longer called here to avoid duplicate scans
 
 	return service
-}
-
-// autoSyncIfNeeded checks if the database is empty and syncs if needed
-func (s *DatabaseSessionService) autoSyncIfNeeded() {
-	// プロジェクト数をチェック
-	projects, err := s.db.ListProjects()
-	if err != nil || len(projects) == 0 {
-		// データベースが空の場合、自動的に同期
-		fmt.Println("Database is empty. Starting initial sync...")
-		result, err := db.SyncAll(s.db, s.parser)
-		if err != nil {
-			fmt.Printf("Warning: Auto-sync failed: %v\n", err)
-			s.syncError = err
-			return
-		}
-		fmt.Printf("Initial sync completed: %d projects, %d sessions synced\n",
-			result.ProjectsProcessed, result.SessionsSynced)
-	}
 }
 
 // ListProjects returns all available projects from the database
@@ -409,7 +390,10 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 		// セッション数を取得
 		sessionCount, err := s.db.CountSessions(row.ID)
 		if err != nil {
-			fmt.Printf("Warning: failed to count sessions for project %s: %v\n", row.Name, err)
+			s.logger.WarnWithContext("Failed to count sessions for project", map[string]interface{}{
+				"project": row.Name,
+				"error":   err.Error(),
+			})
 			sessionCount = 0
 		}
 

@@ -144,8 +144,7 @@ func (p *Parser) ParseFile(filePath string) (*Session, error) {
 
 		var entry LogEntry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			// Log warning but continue parsing
-			fmt.Printf("Warning: failed to parse line %d: %v\n", lineNum, err)
+			// Parse error is returned by scanner.Err()
 			continue
 		}
 
@@ -226,8 +225,7 @@ func (p *Parser) GetProjectWorkingDirectory(projectName string) (string, error) 
 	for _, sessionID := range sessions {
 		session, err := p.ParseSession(projectName, sessionID)
 		if err != nil {
-			// パースエラーは警告のみで次のセッションを試す
-			fmt.Printf("Warning: failed to parse session %s: %v\n", sessionID, err)
+			// Parse error is handled by upper layer
 			continue
 		}
 

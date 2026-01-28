@@ -363,6 +363,13 @@ make help
 | `PORT` | サーバーポート番号 | `8080` | `3000` |
 | `CLAUDE_PROJECTS_DIR` | Claudeプロジェクトディレクトリ | `~/.claude/projects` | `/custom/path/to/projects` |
 | `ENABLE_CORS` | CORS有効化（開発用） | `false` | `true` |
+| `LOG_LEVEL` | ログレベル（DEBUG, INFO, WARN, ERROR） | `INFO` | `DEBUG` |
+
+**ログレベルについて**:
+- `DEBUG`: 詳細なデバッグ情報を出力（開発時推奨）
+- `INFO`: 通常の動作情報を出力（本番環境推奨）
+- `WARN`: 警告以上を出力
+- `ERROR`: エラーのみを出力
 
 ### ファイル監視設定
 

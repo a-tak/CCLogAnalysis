@@ -53,8 +53,6 @@ func (w *FileWatcher) Start() {
 	w.lastSync = time.Time{} // Zero time to allow initial sync
 
 	go w.watchLoop()
-
-	fmt.Println("File watcher started")
 }
 
 // Stop stops the file watcher
@@ -74,8 +72,6 @@ func (w *FileWatcher) Stop() {
 	w.mu.Lock()
 	w.running = false
 	w.mu.Unlock()
-
-	fmt.Println("File watcher stopped")
 }
 
 // watchLoop is the main polling loop (runs in goroutine)
@@ -92,9 +88,7 @@ func (w *FileWatcher) watchLoop() {
 		case <-ticker.C:
 			// Polling tick - check for new files and sync
 			if w.shouldSync() {
-				if err := w.triggerSync(); err != nil {
-					fmt.Printf("File watcher: sync failed: %v\n", err)
-				}
+				_ = w.triggerSync() // Error is handled at upper layer
 			}
 		}
 	}
@@ -117,7 +111,7 @@ func (w *FileWatcher) shouldSync() bool {
 func (w *FileWatcher) triggerSync() error {
 	// DEBUGレベルでのみ表示（ログスパム削減のため）
 
-	result, err := db.SyncIncremental(w.db, w.parser)
+	_, err := db.SyncIncremental(w.db, w.parser)
 	if err != nil {
 		return fmt.Errorf("sync failed: %w", err)
 	}
@@ -126,11 +120,6 @@ func (w *FileWatcher) triggerSync() error {
 	w.mu.Lock()
 	w.lastSync = time.Now()
 	w.mu.Unlock()
-
-	if result.SessionsSynced > 0 {
-		fmt.Printf("File watcher: synced %d sessions from %d projects\n",
-			result.SessionsSynced, result.ProjectsProcessed)
-	}
 
 	return nil
 }
