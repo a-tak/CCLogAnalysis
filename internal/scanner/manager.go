@@ -92,6 +92,13 @@ func (m *ScanManager) GetProgress() ScanProgress {
 	return progress
 }
 
+// WaitForInitialScan waits for the initial scan to complete
+// This should be called after StartInitialScan to ensure scan completes
+// before starting other operations like file watching
+func (m *ScanManager) WaitForInitialScan() {
+	m.wg.Wait()
+}
+
 // Stop stops the scan operation gracefully
 func (m *ScanManager) Stop() {
 	m.mu.Lock()

@@ -72,11 +72,17 @@ func main() {
 			log.Printf("Warning: Failed to start initial scan: %v", err)
 		}
 		fmt.Println("Initial sync started in background...")
+
+		// Wait for initial sync to complete before starting file watcher
+		// This prevents concurrent sync operations that could cause excessive logging
+		fmt.Println("Waiting for initial sync to complete...")
+		scanManager.WaitForInitialScan()
+		fmt.Println("Initial sync completed")
 	} else {
 		fmt.Println("Skipping initial sync (SKIP_INITIAL_SYNC is set)")
 	}
 
-	// Initialize file watcher
+	// Initialize file watcher (after initial sync completes)
 	watcherConfig := watcher.LoadWatcherConfig()
 	var fileWatcher *watcher.FileWatcher
 
