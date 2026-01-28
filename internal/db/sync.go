@@ -348,6 +348,10 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 			}
 		}
 
+		// このプロジェクトのスキャン開始時点でのカウントを記録
+		projectSessionsSyncedBefore := result.SessionsSynced
+		projectSessionsSkippedBefore := result.SessionsSkipped
+
 		// 前回のスキャン時刻を取得
 		lastScanTime, err := database.GetProjectLastScanTime(project.ID)
 		if err != nil {
@@ -474,17 +478,21 @@ func SyncIncrementalWithLogger(database *DB, p *parser.Parser, log *logger.Logge
 
 		result.ProjectsProcessed++
 
+		// このプロジェクトで同期/スキップされたセッション数を計算
+		projectSessionsSynced := result.SessionsSynced - projectSessionsSyncedBefore
+		projectSessionsSkipped := result.SessionsSkipped - projectSessionsSkippedBefore
+
 		// 変更があったプロジェクトのみINFOレベルでログ出力
-		if result.SessionsSynced > 0 {
+		if projectSessionsSynced > 0 {
 			log.InfoWithContext("Project scan completed", map[string]interface{}{
 				"project":          projectName,
-				"sessions_synced":  result.SessionsSynced,
-				"sessions_skipped": result.SessionsSkipped,
+				"sessions_synced":  projectSessionsSynced,
+				"sessions_skipped": projectSessionsSkipped,
 			})
 		} else {
 			log.DebugWithContext("Project scan completed (no changes)", map[string]interface{}{
 				"project":          projectName,
-				"sessions_skipped": result.SessionsSkipped,
+				"sessions_skipped": projectSessionsSkipped,
 			})
 		}
 	}

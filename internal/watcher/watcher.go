@@ -66,8 +66,13 @@ func (w *FileWatcher) Stop() {
 
 	close(w.stopCh)
 
-	// Wait for goroutine to finish
-	<-w.doneCh
+	// Wait for goroutine to finish with timeout
+	select {
+	case <-w.doneCh:
+		// Goroutine finished normally
+	case <-time.After(2 * time.Second):
+		// Timeout - goroutine will exit on next ticker or stopCh
+	}
 
 	w.mu.Lock()
 	w.running = false
