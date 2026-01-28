@@ -6,6 +6,11 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import type { SessionSummary } from '@/lib/api/types'
 
+interface DateRangeFilter {
+  startDate: string | null  // YYYY-MM-DD形式
+  endDate: string | null    // YYYY-MM-DD形式
+}
+
 interface SessionListTabProps {
   sessions: SessionSummary[]
   loading: boolean
@@ -13,15 +18,37 @@ interface SessionListTabProps {
 
 export function SessionListTab({ sessions, loading }: SessionListTabProps) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [dateFilter, setDateFilter] = useState<DateRangeFilter>({
+    startDate: null,
+    endDate: null
+  })
   const pageSize = 20
 
-  // ページネーション計算
-  const totalPages = Math.ceil(sessions.length / pageSize)
+  // フィルタリング
+  const filteredSessions = useMemo(() => {
+    return sessions.filter(session => {
+      // 日付範囲チェック
+      const sessionDate = new Date(session.startTime).toISOString().split('T')[0]
+
+      if (dateFilter.startDate && sessionDate < dateFilter.startDate) {
+        return false
+      }
+
+      if (dateFilter.endDate && sessionDate > dateFilter.endDate) {
+        return false
+      }
+
+      return true
+    })
+  }, [sessions, dateFilter])
+
+  // ページネーション計算（フィルタリング後）
+  const totalPages = Math.ceil(filteredSessions.length / pageSize)
   const startIndex = (currentPage - 1) * pageSize
   const endIndex = startIndex + pageSize
   const displayedSessions = useMemo(
-    () => sessions.slice(startIndex, endIndex),
-    [sessions, startIndex, endIndex]
+    () => filteredSessions.slice(startIndex, endIndex),
+    [filteredSessions, startIndex, endIndex]
   )
 
   if (loading) {
@@ -44,14 +71,83 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
 
   return (
     <div className="space-y-4">
+      {/* フィルタカード */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>フィルタ</CardTitle>
+            {(dateFilter.startDate || dateFilter.endDate) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDateFilter({ startDate: null, endDate: null })
+                  setCurrentPage(1)
+                }}
+              >
+                クリア
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">期間</label>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="date"
+                  value={dateFilter.startDate || ''}
+                  onChange={(e) => {
+                    setDateFilter({
+                      ...dateFilter,
+                      startDate: e.target.value || null
+                    })
+                    setCurrentPage(1)
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+                <span className="text-muted-foreground">～</span>
+                <input
+                  type="date"
+                  value={dateFilter.endDate || ''}
+                  onChange={(e) => {
+                    setDateFilter({
+                      ...dateFilter,
+                      endDate: e.target.value || null
+                    })
+                    setCurrentPage(1)
+                  }}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+              {(dateFilter.startDate || dateFilter.endDate) && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  {dateFilter.startDate && `${new Date(dateFilter.startDate).toLocaleDateString('ja-JP')} から`}
+                  {dateFilter.endDate && ` ${new Date(dateFilter.endDate).toLocaleDateString('ja-JP')} まで`}
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* セッション一覧カード */}
       <Card>
         <CardHeader>
           <CardTitle>
-            セッション一覧 ({sessions.length.toLocaleString()}件)
+            セッション一覧 ({filteredSessions.length.toLocaleString()}件
+            {filteredSessions.length !== sessions.length &&
+              ` / ${sessions.length.toLocaleString()}件中`})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          {filteredSessions.length === 0 ? (
+            <div className="py-12 text-center text-muted-foreground">
+              条件に一致するセッションが見つかりません
+            </div>
+          ) : (
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>セッションID</TableHead>
@@ -96,6 +192,7 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -103,7 +200,7 @@ export function SessionListTab({ sessions, loading }: SessionListTabProps) {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">
-            {startIndex + 1} - {Math.min(endIndex, sessions.length)} / {sessions.length}件
+            {startIndex + 1} - {Math.min(endIndex, filteredSessions.length)} / {filteredSessions.length}件
           </p>
           <div className="flex gap-2">
             <Button
