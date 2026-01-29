@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.0] - 2026-01-29
+
+### Added
+- プロジェクト表示名の改善 - エンコード済みフォルダ名の代わりにわかりやすいフォルダ名を表示
+- セッションのcwdからプロジェクト表示名を自動取得
+- グループ表示名をgit_rootから自動取得
+
+### Changed
+- displayName生成ロジックを共通化してエラーハンドリングを改善
+
+### Fixed
+- 不安定なタイミング依存テストを削除し、テストの信頼性を向上
+
+---
+
 ## [0.3.1] - 2026-01-29
 
 ### Fixed

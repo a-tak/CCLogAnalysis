@@ -289,7 +289,7 @@ func TestFileWatcher_ShouldSync_Debounce(t *testing.T) {
 	}
 }
 
-func TestFileWatcher_WatchLoop_PeriodicExecution(t *testing.T) {
+func TestFileWatcher_ManualTriggerSync(t *testing.T) {
 	database, cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -306,17 +306,24 @@ func TestFileWatcher_WatchLoop_PeriodicExecution(t *testing.T) {
 	}
 
 	watcher := NewFileWatcher(database, p, config)
-	watcher.Start()
-	defer watcher.Stop()
 
-	// Wait for at least 2 polling cycles
-	time.Sleep(500 * time.Millisecond)
+	// First sync
+	err := watcher.triggerSync()
+	if err != nil {
+		t.Fatalf("Failed to trigger first sync: %v", err)
+	}
 
-	// Add a new session during watch
+	// Wait at least 1 second to ensure different timestamp
+	time.Sleep(1100 * time.Millisecond)
+
+	// Add a new session
 	createTestSession(t, projectsDir, "test-project", "session-2")
 
-	// Wait for another polling cycle
-	time.Sleep(300 * time.Millisecond)
+	// Second sync
+	err = watcher.triggerSync()
+	if err != nil {
+		t.Fatalf("Failed to trigger second sync: %v", err)
+	}
 
 	// Verify both sessions were synced
 	projects, err := database.ListProjects()
@@ -328,14 +335,25 @@ func TestFileWatcher_WatchLoop_PeriodicExecution(t *testing.T) {
 		t.Error("Expected at least one project")
 	}
 
-	// Get sessions for the project
 	sessions, err := database.ListSessions(&projects[0].ID, 100, 0)
 	if err != nil {
 		t.Fatalf("Failed to list sessions: %v", err)
 	}
 
-	// Should have synced both sessions
+	// Debug info
 	if len(sessions) < 2 {
+		t.Logf("Found %d sessions:", len(sessions))
+		for i, s := range sessions {
+			t.Logf("  Session %d: ID=%s", i+1, s.ID)
+		}
+
+		sessionFiles, _ := filepath.Glob(filepath.Join(projectsDir, "test-project", "*.jsonl"))
+		t.Logf("Session files in filesystem: %d", len(sessionFiles))
+		for _, f := range sessionFiles {
+			info, _ := os.Stat(f)
+			t.Logf("  File: %s, ModTime: %v", filepath.Base(f), info.ModTime())
+		}
+
 		t.Errorf("Expected at least 2 sessions, got %d", len(sessions))
 	}
 }

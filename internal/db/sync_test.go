@@ -230,6 +230,10 @@ func TestSyncIncremental(t *testing.T) {
 
 		initialSynced := result1.SessionsSynced
 
+		// shouldSyncSessionは秒単位で時刻を比較するため、
+		// lastScanTimeより確実に新しいタイムスタンプにするために1秒以上待つ
+		time.Sleep(1100 * time.Millisecond)
+
 		// 新しいセッションを追加
 		project1Dir := filepath.Join(claudeDir, "test-project-1")
 		newSessionPath := filepath.Join(project1Dir, "session-new.jsonl")
@@ -242,7 +246,6 @@ func TestSyncIncremental(t *testing.T) {
 		}
 
 		// 差分同期
-		time.Sleep(10 * time.Millisecond) // ファイルシステムのタイムスタンプ更新を待つ
 		result2, err := SyncIncremental(database, p)
 		if err != nil {
 			t.Fatalf("Incremental sync failed: %v", err)
