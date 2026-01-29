@@ -190,7 +190,7 @@ describe('useDrilldown', () => {
     const mockData2 = { sessions: [{ id: '2' }] }
 
     const fetchData1 = vi.fn().mockResolvedValue(mockData1)
-    let fetchData = fetchData1
+    const fetchData = fetchData1
 
     const { result, rerender } = renderHook(
       ({ fetchData: fd }) => useDrilldown({ fetchData: fd }),
