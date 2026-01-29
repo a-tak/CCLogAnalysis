@@ -171,11 +171,12 @@ type TimeSeriesResponse struct {
 
 // ProjectGroupResponse represents a project group
 type ProjectGroupResponse struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	GitRoot   *string   `json:"gitRoot,omitempty"` // NULL可能
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	DisplayName string    `json:"displayName"`
+	GitRoot     *string   `json:"gitRoot,omitempty"` // NULL可能
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // ProjectGroupListResponse represents the list of project groups
@@ -185,12 +186,13 @@ type ProjectGroupListResponse struct {
 
 // ProjectGroupDetailResponse represents detailed project group info with member projects
 type ProjectGroupDetailResponse struct {
-	ID        int64             `json:"id"`
-	Name      string            `json:"name"`
-	GitRoot   *string           `json:"gitRoot,omitempty"` // NULL可能
-	CreatedAt time.Time         `json:"createdAt"`
-	UpdatedAt time.Time         `json:"updatedAt"`
-	Projects  []ProjectResponse `json:"projects"`
+	ID          int64             `json:"id"`
+	Name        string            `json:"name"`
+	DisplayName string            `json:"displayName"`
+	GitRoot     *string           `json:"gitRoot,omitempty"` // NULL可能
+	CreatedAt   time.Time         `json:"createdAt"`
+	UpdatedAt   time.Time         `json:"updatedAt"`
+	Projects    []ProjectResponse `json:"projects"`
 }
 
 // ProjectGroupStatsResponse represents project group statistics

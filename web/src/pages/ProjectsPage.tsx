@@ -268,7 +268,7 @@ export function ProjectsPage() {
                         <CardHeader>
                           <CardTitle className="text-lg flex items-center gap-2">
                             <GitBranch className="h-5 w-5" />
-                            {group.name}
+                            {group.displayName}
                           </CardTitle>
                           <CardDescription className="text-xs">
                             <div className="truncate" title={group.gitRoot || undefined}>

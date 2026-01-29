@@ -350,12 +350,19 @@ func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, er
 	for _, row := range groupRows {
 		// 除外対象でない場合のみ追加
 		if !hiddenMap[row.ID] {
+			// git_root から displayName を取得
+			displayName := row.Name // デフォルトはエンコード済み名前
+			if row.GitRoot != nil && *row.GitRoot != "" {
+				displayName = filepath.Base(*row.GitRoot)
+			}
+
 			groups = append(groups, ProjectGroupResponse{
-				ID:        row.ID,
-				Name:      row.Name,
-				GitRoot:   row.GitRoot,
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
+				ID:          row.ID,
+				Name:        row.Name,
+				DisplayName: displayName,
+				GitRoot:     row.GitRoot,
+				CreatedAt:   row.CreatedAt,
+				UpdatedAt:   row.UpdatedAt,
 			})
 		}
 	}
@@ -419,13 +426,20 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 		})
 	}
 
+	// git_root から displayName を取得
+	displayName := group.Name // デフォルトはエンコード済み名前
+	if group.GitRoot != nil && *group.GitRoot != "" {
+		displayName = filepath.Base(*group.GitRoot)
+	}
+
 	return &ProjectGroupDetailResponse{
-		ID:        group.ID,
-		Name:      group.Name,
-		GitRoot:   group.GitRoot,
-		CreatedAt: group.CreatedAt,
-		UpdatedAt: group.UpdatedAt,
-		Projects:  projects,
+		ID:          group.ID,
+		Name:        group.Name,
+		DisplayName: displayName,
+		GitRoot:     group.GitRoot,
+		CreatedAt:   group.CreatedAt,
+		UpdatedAt:   group.UpdatedAt,
+		Projects:    projects,
 	}, nil
 }
 

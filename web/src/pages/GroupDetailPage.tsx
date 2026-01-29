@@ -90,14 +90,14 @@ export default function GroupDetailPage() {
   return (
     <div className="container mx-auto py-8">
       {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: group.name }]} />
+      <Breadcrumb items={[{ label: group.displayName }]} />
 
       {/* Group Info */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center gap-2">
             <GitBranch className="h-6 w-6" />
-            <CardTitle className="text-2xl">{group.name}</CardTitle>
+            <CardTitle className="text-2xl">{group.displayName}</CardTitle>
           </div>
           <CardDescription>
             <div className="flex flex-col gap-1 mt-2">
