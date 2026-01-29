@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -48,10 +49,16 @@ func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 			sessionCount = len(sessions)
 		}
 
+		// 実際の作業ディレクトリから displayName を取得
+		displayName := row.Name // デフォルトはエンコード済み名前
+		if cwd, err := s.db.GetProjectWorkingDirectory(row.ID); err == nil {
+			displayName = filepath.Base(cwd)
+		}
+
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
-			DisplayName:  extractDisplayName(row.DecodedPath),
+			DisplayName:  displayName,
 			SessionCount: sessionCount,
 		})
 	}
@@ -398,10 +405,16 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 			sessionCount = 0
 		}
 
+		// 実際の作業ディレクトリから displayName を取得
+		displayName := row.Name // デフォルトはエンコード済み名前
+		if cwd, err := s.db.GetProjectWorkingDirectory(row.ID); err == nil {
+			displayName = filepath.Base(cwd)
+		}
+
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
-			DisplayName:  extractDisplayName(row.DecodedPath),
+			DisplayName:  displayName,
 			SessionCount: sessionCount,
 		})
 	}

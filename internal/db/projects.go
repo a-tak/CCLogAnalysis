@@ -216,3 +216,41 @@ func (db *DB) GetProjectLastScanTime(projectID int64) (*time.Time, error) {
 
 	return &scanTime, nil
 }
+
+// GetProjectWorkingDirectory returns the working directory from the most recent session
+func (db *DB) GetProjectWorkingDirectory(projectID int64) (string, error) {
+	// 最新セッションのIDを取得
+	var sessionID string
+	sessionQuery := `
+		SELECT id
+		FROM sessions
+		WHERE project_id = ?
+		ORDER BY start_time DESC
+		LIMIT 1
+	`
+	err := db.conn.QueryRow(sessionQuery, projectID).Scan(&sessionID)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("no sessions found for project")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get latest session: %w", err)
+	}
+
+	// 最新セッションのログエントリからcwdを取得
+	var cwd string
+	cwdQuery := `
+		SELECT cwd
+		FROM log_entries
+		WHERE session_id = ? AND cwd IS NOT NULL AND cwd != ''
+		LIMIT 1
+	`
+	err = db.conn.QueryRow(cwdQuery, sessionID).Scan(&cwd)
+	if err == sql.ErrNoRows {
+		return "", fmt.Errorf("no cwd found in session")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get cwd: %w", err)
+	}
+
+	return cwd, nil
+}
