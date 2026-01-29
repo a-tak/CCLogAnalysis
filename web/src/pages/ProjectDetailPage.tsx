@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 import type { SessionSummary, ProjectDailyStatsResponse } from '@/lib/api/types'
@@ -28,9 +28,14 @@ export default function ProjectDetailPage() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('stats')
 
-  // Drilldown hook
+  // Drilldown hook - fetchData をメモ化して無限リクエストを防止
+  const fetchProjectDailyStats = useCallback(
+    (date: string) => api.getProjectDailyStats(name || '', date),
+    [name]
+  )
+
   const drilldown = useDrilldown<ProjectDailyStatsResponse>({
-    fetchData: (date) => api.getProjectDailyStats(name || '', date),
+    fetchData: fetchProjectDailyStats,
   })
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -21,9 +21,14 @@ export function ProjectsPage() {
   // 15秒ごとにポーリングしてデータを自動更新
   const { projects, groups, totalStats, timeline, loading, error } = useProjectsPolling(period)
 
-  // Drilldown hook
+  // Drilldown hook - fetchData をメモ化して無限リクエストを防止
+  const fetchDailyStats = useCallback(
+    (date: string) => api.getDailyStats(date),
+    []
+  )
+
   const drilldown = useDrilldown<DailyStatsResponse>({
-    fetchData: (date) => api.getDailyStats(date),
+    fetchData: fetchDailyStats,
   })
 
   return (
