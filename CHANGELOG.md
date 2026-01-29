@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.1] - 2026-01-29
+
+### Fixed
+- 日付ドリルダウンの無限リクエスト問題を修正（Issue #16）
+- ProjectsPageでも日付ドリルダウンの無限リクエスト問題を修正
+- settings.jsonの危険なプロセス管理コマンドを削除
+
+---
+
 ## [0.4.0] - 2026-01-29
 
 ### Added
