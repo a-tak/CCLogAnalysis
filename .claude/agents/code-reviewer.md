@@ -25,14 +25,14 @@ context: fork
 
 ```markdown
 ❌ NG: 個人情報の漏洩
-- ユーザー名: `/Users/a-tak/...`
-- プロジェクト固有の名前: `CCLogAnalysis`
-- 実際のパス: `/Users/a-tak/Documents/...`
+- ユーザー名: `/Users/{username}/...`
+- プロジェクト固有の名前: `{project-name}`
+- 実際のパス: `/Users/{username}/Documents/...`
 
 ✅ OK: 一般化された表現
 - ユーザー名: `{username}`
 - プロジェクト名: `{project-name}`
-- パス: 一般化されたパス例
+- パス: `{home-directory}/Documents/...`
 ```
 
 **チェック項目:**
@@ -393,7 +393,7 @@ db.Query("SELECT * FROM users WHERE name = ?", userName)
 **ファイル:** README.md:10
 **問題:**
 ```markdown
-cd /Users/a-tak/Documents/GitHub/...
+cd /Users/{username}/Documents/GitHub/...
 ```
 
 **推奨修正:**

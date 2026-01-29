@@ -244,7 +244,7 @@ cd web && npm run build
 
 # 統合テスト
 ./bin/ccloganalysis
-open http://localhost:8080/projects/-Users-a-tak-Documents-GitHub-voxment
+open http://localhost:8080/projects/{encoded-project-path}
 ```
 
 ---

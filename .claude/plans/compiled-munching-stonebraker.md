@@ -12,7 +12,7 @@ Git Worktreeプロジェクトのグルーピング機能において、以下�
 - 結果として、グループ一覧に100件ものグループが表示され、UIが見づらい
 
 **例**：
-- voxmentグループ（`git_root=/Users/a-tak/Documents/GitHub/voxment`）が存在
+- voxmentグループ（`git_root={git-root-path}`）が存在
 - voxmentグループには7つのメンバープロジェクトが含まれる（voxment本体 + 現存する6つのワークツリー）
 - しかし、削除済みワークツリー（90件以上）も個別グループとして一覧に表示されている
 
@@ -311,7 +311,7 @@ rm ccloganalysis.db
 3. 以下を確認：
    - **git_rootを持つグループ（CCLogAnalysis, open-claude-code, voxment, thedotmack）が先頭に表示**
    - **削除済みワークツリーのグループが非表示**（100件から大幅に減少）
-   - **独立プロジェクト（`-Users-a-tak` など）が表示**
+   - **独立プロジェクト（`{encoded-standalone-project}` など）が表示**
 4. voxmentグループをクリック
 5. **削除済みワークツリーがメンバーとして表示されることを確認**
 

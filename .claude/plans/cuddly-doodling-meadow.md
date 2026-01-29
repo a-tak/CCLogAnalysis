@@ -121,7 +121,7 @@ s.logger.WarnWithContext("Failed to count sessions for project", map[string]inte
 ### 1. 通常起動（INFOレベル）
 
 ```bash
-cd /Users/a-tak/Documents/GitHub/CCLogAnalysis.worktrees/reduce-excessive-logging
+cd {project-root}
 go run cmd/server/main.go
 ```
 
@@ -169,7 +169,7 @@ LOG_LEVEL=DEBUG go run cmd/server/main.go
 
 ## Critical Files for Implementation
 
-- `/Users/a-tak/Documents/GitHub/CCLogAnalysis.worktrees/reduce-excessive-logging/internal/watcher/watcher.go`
-- `/Users/a-tak/Documents/GitHub/CCLogAnalysis.worktrees/reduce-excessive-logging/internal/api/service_db.go`
-- `/Users/a-tak/Documents/GitHub/CCLogAnalysis.worktrees/reduce-excessive-logging/internal/parser/parser.go`
-- `/Users/a-tak/Documents/GitHub/CCLogAnalysis.worktrees/reduce-excessive-logging/README.md`
+- `{project-root}/internal/watcher/watcher.go`
+- `{project-root}/internal/api/service_db.go`
+- `{project-root}/internal/parser/parser.go`
+- `{project-root}/README.md`
