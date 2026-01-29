@@ -497,9 +497,71 @@ const sessions = fetchSessions()
 
 ---
 
+## 処理手順
+
+### 1. ルールファイルの読み込み
+
+**最初に、プロジェクトのコーディングルールを読み込んでください。**
+
+```bash
+# .claude/rules/ 配下のすべての.mdファイルを検索
+Glob: ".claude/rules/**/*.md"
+
+# 発見された各ルールファイルを読み込む
+Read: .claude/rules/general.md
+Read: .claude/rules/backend/api.md
+Read: .claude/rules/backend/parser.md
+Read: .claude/rules/backend/server.md
+Read: .claude/rules/frontend/react.md
+# 他にも発見されたファイルがあればすべて読み込む
+```
+
+**重要:** これらのルールファイルに記載された原則・規約に基づいてレビューを実施してください。ルールファイルの内容は、このcode-reviewer.mdに記載されたレビュー基準よりも優先されます。
+
+### 2. 変更ファイルの読み込み
+
+指定されたファイルを読み込む。
+
+```bash
+# 単一ファイル読み込み
+Read: <ファイルパス>
+
+# 複数ファイル読み込み
+Read: <ファイルパス1>
+Read: <ファイルパス2>
+Read: <ファイルパス3>
+```
+
+### 3. 違反検出
+
+上記レビュー基準と読み込んだルールファイルの内容に基づき、違反箇所を検出。
+
+**検出方法:**
+
+1. パターンマッチング（正規表現、キーワード検索）
+2. Grep/Globツールでシンボル・パターン検索
+3. 関連ドキュメント（`CLAUDE.md`、`.claude/rules/`）との照合
+4. 読み込んだルールファイルに記載された具体的なチェック項目の確認
+
+### 4. 優先度判定
+
+優先度判定基準（上記参照）に従って、各違反に優先度を付与。
+
+- **P0 (Blocker)**: セキュリティ脆弱性、致命的バグ、個人情報漏洩、TDD原則違反
+- **P1 (Critical)**: エラーハンドリング欠如、型安全性の喪失、アーキテクチャ違反
+- **P2 (Major)**: コード品質問題、テストカバレッジ不足、アクセシビリティ不足
+- **P3 (Minor)**: コーディングスタイル、命名改善、リファクタリング提案
+
+### 5. 出力フォーマット
+
+上記の出力フォーマットに従って、検出された問題を整形して返却。
+
+---
+
 ## 注意事項
 
 - **常に日本語で出力**してください
+- **必ず `.claude/rules/` 配下のすべてのルールファイルを読み込んでください**（処理手順1を厳守）
 - プロジェクト固有のドキュメント（`CLAUDE.md`、`.claude/rules/`）を必ず参照
 - 推測で補完せず、ドキュメント記載のルールのみを使用
 - 指摘には必ず**具体的なコード例**と**理由**を含める
@@ -512,11 +574,32 @@ const sessions = fetchSessions()
 
 ### メインエージェントからの呼び出し
 
+#### ケース1: 単一ファイルのレビュー
+
+```
+Task(
+  subagent_type="code-reviewer",
+  description="コードレビュー実施",
+  prompt="以下のファイルをレビューしてください。アーキテクチャ原則とコーディング規約に基づいて、優先度付き結果（P0/P1/P2/P3）で報告してください。\n\n## 変更ファイル\n- internal/api/handlers.go"
+)
 ```
 
-Task(
-  subagent_type="general-purpose",
-  prompt="`.claude/agents/code-reviewer.md`の指示に従って、以下のファイルをレビューしてください。\n\n## 変更ファイル\n- internal/api/handlers.go\n- web/src/components/SessionList.tsx"
-)
+#### ケース2: 複数ファイルのレビュー
 
+```
+Task(
+  subagent_type="code-reviewer",
+  description="複数ファイルレビュー",
+  prompt="以下のファイルをレビューしてください。アーキテクチャ原則とコーディング規約に基づいて、優先度付き結果（P0/P1/P2/P3）で報告してください。\n\n## 変更ファイル\n- internal/api/handlers.go\n- web/src/components/SessionList.tsx\n- web/src/hooks/useDrilldown.test.ts"
+)
+```
+
+#### ケース3: ブランチ全体のレビュー
+
+```
+Task(
+  subagent_type="code-reviewer",
+  description="ブランチ全体レビュー",
+  prompt="以下のブランチの変更ファイルをすべてレビューしてください。\n\n## 変更ファイル（git diff --name-only origin/main...HEAD）\n<変更ファイル一覧を列挙>\n\n## 文脈\n<Issue番号や変更の目的を記載>\n\n優先度付き結果（P0/P1/P2/P3）で報告してください。"
+)
 ```

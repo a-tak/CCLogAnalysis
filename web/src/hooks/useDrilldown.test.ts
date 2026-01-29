@@ -1,4 +1,4 @@
-import { renderHook, act } from '@testing-library/react'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { describe, test, expect, vi } from 'vitest'
 import { useDrilldown } from './useDrilldown'
 
@@ -35,10 +35,11 @@ describe('useDrilldown', () => {
     expect(fetchData).toHaveBeenCalledWith('2026-01-29')
 
     // データが取得されるまで待つ
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
 
     expect(result.current.data).toEqual(mockData)
-    expect(result.current.loading).toBe(false)
     expect(result.current.error).toBeNull()
   })
 
@@ -56,7 +57,9 @@ describe('useDrilldown', () => {
     expect(result.current.selectedDate).toBe('2026-01-29')
 
     // データが取得されるまで待つ
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
 
     expect(result.current.data).toEqual(mockData)
 
@@ -83,9 +86,10 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-29')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.data).toEqual(mockData1)
+    })
 
-    expect(result.current.data).toEqual(mockData1)
     expect(fetchData).toHaveBeenCalledWith('2026-01-29')
 
     // 異なる日付をクリック
@@ -93,10 +97,11 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-28')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.data).toEqual(mockData2)
+    })
 
     expect(result.current.selectedDate).toBe('2026-01-28')
-    expect(result.current.data).toEqual(mockData2)
     expect(fetchData).toHaveBeenCalledWith('2026-01-28')
     expect(fetchData).toHaveBeenCalledTimes(2)
   })
@@ -110,21 +115,20 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-29')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
 
     expect(result.current.error).toBe('データの取得に失敗しました')
     expect(result.current.data).toBeNull()
-    expect(result.current.loading).toBe(false)
   })
 
-  test('API エラーの場合はエラーメッセージが表示される', async () => {
-    // ApiError は lib/api/client から直接インポートできないため、
-    // instanceof チェック自体をテストするのではなく、
-    // エラーメッセージを含むエラーオブジェクトをテストする
-    const mockError = new Error('API Error: Not Found')
-    mockError.name = 'ApiError'
-
-    const fetchData = vi.fn().mockRejectedValue(mockError)
+  test('API通信エラー時は統一されたエラーメッセージを表示', async () => {
+    // ネットワークエラーなど、API通信が失敗するケースをシミュレート
+    // ApiError 以外のエラーの場合、統一されたエラーメッセージが表示される
+    const fetchData = vi.fn().mockRejectedValue(
+      new Error('Network error')
+    )
 
     const { result } = renderHook(() => useDrilldown({ fetchData }))
 
@@ -132,9 +136,11 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-29')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
 
-    // ApiError ではないため、一般的なエラーメッセージが使われる
+    // 一般的なエラーメッセージが表示される
     expect(result.current.error).toBe('データの取得に失敗しました')
     expect(result.current.data).toBeNull()
   })
@@ -163,10 +169,11 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-29')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.data).toEqual(mockData)
+    })
 
     expect(result.current.selectedDate).toBe('2026-01-29')
-    expect(result.current.data).toEqual(mockData)
 
     // close() を呼ぶ
     act(() => {
@@ -202,18 +209,18 @@ describe('useDrilldown', () => {
       result.current.handleDateClick('2026-01-29')
     })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await waitFor(() => {
+      expect(result.current.data).toEqual(mockData1)
+    })
 
-    expect(result.current.data).toEqual(mockData1)
     expect(fetchData1).toHaveBeenCalledTimes(1)
 
     // fetchData を新しい関数に変更
     const fetchData2 = vi.fn().mockResolvedValue(mockData2)
     rerender({ fetchData: fetchData2 })
 
-    await new Promise(resolve => setTimeout(resolve, 50))
-
-    // 新しい fetchData が呼ばれる
-    expect(fetchData2).toHaveBeenCalledWith('2026-01-29')
+    await waitFor(() => {
+      expect(fetchData2).toHaveBeenCalledWith('2026-01-29')
+    })
   })
 })
