@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '@/lib/api/client'
 import type { ProjectGroupDetail, ProjectGroupStats, TimeSeriesResponse, GroupDailyStatsResponse } from '@/lib/api/types'
@@ -24,12 +24,17 @@ export default function GroupDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Drilldown hook
-  const drilldown = useDrilldown<GroupDailyStatsResponse>({
-    fetchData: (date) => {
+  // Drilldown hook - fetchData をメモ化して無限リクエストを防止
+  const fetchGroupDailyStats = useCallback(
+    (date: string) => {
       const groupId = parseInt(id || '0', 10)
       return api.getGroupDailyStats(groupId, date)
     },
+    [id]
+  )
+
+  const drilldown = useDrilldown<GroupDailyStatsResponse>({
+    fetchData: fetchGroupDailyStats,
   })
 
   useEffect(() => {
