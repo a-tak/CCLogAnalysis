@@ -8,7 +8,7 @@ Claude Codeに対する各種調整（モデル選択、プロンプト設定な
 
 ## バイナリダウンロード
 
-最新リリースは [GitHub Releases](https://github.com/{username}/{project-name}/releases) からダウンロードできます。
+最新リリースは [GitHub Releases](https://github.com/a-tak/CCLogAnalysis/releases) からダウンロードできます。
 
 ### 対応プラットフォーム
 
@@ -31,23 +31,26 @@ Claude Codeに対する各種調整（モデル選択、プロンプト設定な
 ccloganalysis.exe
 ```
 
-ブラウザで http://localhost:8080 にアクセスすると、React UIが表示されます。
+ブラウザで <http://localhost:8080> にアクセスすると、React UIが表示されます。
 
 ## 技術スタック
 
 ### バックエンド
+
 - **言語**: Go 1.21+
 - **HTTPサーバー**: Go標準ライブラリ
 - **データベース**: SQLite（modernc.org/sqlite - Pure Go、cgo不要）
 - **データモード**: SQLiteデータベース
 
 ### フロントエンド
+
 - **フレームワーク**: React + TypeScript
 - **スタイリング**: Tailwind CSS + shadcn/ui
 - **グラフ**: Recharts
 - **ビルドツール**: Vite
 
 ### 配布
+
 - 1バイナリ配布（Go embedでReactビルド成果物を埋め込み）
 - 対応OS: Windows + Mac
 
@@ -108,13 +111,13 @@ git clone https://github.com/{username}/{project-name}.git
 cd {project-name}
 ```
 
-2. Go依存関係のインストール
+1. Go依存関係のインストール
 
 ```bash
 go mod download
 ```
 
-3. React依存関係のインストール
+1. React依存関係のインストール
 
 ```bash
 cd web
@@ -130,6 +133,7 @@ make build
 ```
 
 これにより：
+
 1. Reactフロントエンドがビルドされ `web/dist/` に出力
 2. ビルド成果物が `internal/static/dist/` にコピー
 3. Goバイナリにフロントエンドが埋め込まれる
@@ -159,6 +163,7 @@ Claude Code から以下のコマンドでサーバーを管理できます：
 ```
 
 **利点:**
+
 - 空きポート自動検出（8080-8089）
 - PIDファイルによる確実なプロセス管理
 - Graceful shutdown対応
@@ -167,6 +172,7 @@ Claude Code から以下のコマンドでサーバーを管理できます：
 - 状態確認コマンドで起動状態を簡単に確認
 
 **フォアグラウンドモード:**
+
 - ログが直接ターミナルに表示される
 - Ctrl+C で安全に停止できる
 - 別ターミナルでの実行を推奨
@@ -182,10 +188,12 @@ DB_PATH=./bin/ccloganalysis.db ./bin/ccloganalysis
 ```
 
 **アクセス:**
-- ブラウザで http://localhost:8080 にアクセスするとReact UIが表示されます
+
+- ブラウザで <http://localhost:8080> にアクセスするとReact UIが表示されます
 - server-managementで起動時は、ログに表示されるURLを使用してください
 
 **データベース:**
+
 - 推奨パス: `bin/ccloganalysis.db`
 - デフォルト: 実行ファイルと同じディレクトリの `ccloganalysis.db`
 - 初回起動時に自動的にClaudeプロジェクトのログを同期します
@@ -216,8 +224,9 @@ cd web && npm run dev
 ```
 
 この方式では：
-- バックエンド: http://localhost:8080
-- フロントエンド: http://localhost:5173（Vite開発サーバー）
+
+- バックエンド: <http://localhost:8080>
+- フロントエンド: <http://localhost:5173（Vite開発サーバー）>
 
 フロントエンド開発時はViteの高速なHMR（Hot Module Replacement）が利用できます。
 
@@ -226,6 +235,7 @@ cd web && npm run dev
 Claude Codeからサーバーの起動・停止・状態確認を簡単に行うためのスクリプトを提供しています。
 
 **起動:**
+
 ```bash
 # バックグラウンドモード（開発）
 .claude/skills/server-management/scripts/start-server.sh dev
@@ -238,21 +248,25 @@ Claude Codeからサーバーの起動・停止・状態確認を簡単に行う
 ```
 
 **状態確認:**
+
 ```bash
 .claude/skills/server-management/scripts/status-server.sh
 ```
 
 **停止:**
+
 ```bash
 .claude/skills/server-management/scripts/stop-server.sh
 ```
 
 **ログ確認（バックグラウンドモード時）:**
+
 ```bash
 tail -f .claude/skills/server-management/server.log
 ```
 
 **開発モードのデフォルト環境変数:**
+
 - `PORT=8080`
 - `ENABLE_CORS=true`
 - `ENABLE_FILE_WATCH=true`
@@ -290,6 +304,7 @@ make help
 ```
 
 利用可能なコマンド：
+
 - `make build` - フロントエンド→バックエンドの順でビルド
 - `make build-frontend` - フロントエンドのみビルド
 - `make build-backend` - バックエンドのみビルド
@@ -366,6 +381,7 @@ make help
 | `LOG_LEVEL` | ログレベル（DEBUG, INFO, WARN, ERROR） | `INFO` | `DEBUG` |
 
 **ログレベルについて**:
+
 - `DEBUG`: 詳細なデバッグ情報を出力（開発時推奨）
 - `INFO`: 通常の動作情報を出力（本番環境推奨）
 - `WARN`: 警告以上を出力
@@ -380,6 +396,7 @@ make help
 | `FILE_WATCH_DEBOUNCE` | デバウンス時間（秒） | `5` | 1～60 | `10` |
 
 **ファイル監視機能について**:
+
 - 新しいログファイル（`.jsonl`）が追加されると、自動的にデータベースに同期されます
 - スキャン間隔で定期的にファイルシステムをチェックします
 - デバウンス時間により、短時間の連続同期を抑制して負荷を軽減します
@@ -460,6 +477,7 @@ Claude Codeのログは以下の場所に保存されています：
 データベース版では、ファイルシステム上のJSONLログをSQLiteデータベースに同期して管理します。
 
 **利点**:
+
 - 高速なクエリ実行
 - 複雑な集計・分析が可能
 - 将来的な拡張機能（統計、エラーパターン検出など）の基盤
@@ -469,6 +487,7 @@ Claude Codeのログは以下の場所に保存されています：
 ### データベーススキーマ
 
 **Phase 1（実装済み）**:
+
 - `projects`: プロジェクト情報
 - `sessions`: セッション基本情報とトークン集計
 - `model_usage`: モデル別トークン使用量
@@ -477,6 +496,7 @@ Claude Codeのログは以下の場所に保存されています：
 - `tool_calls`: ツール呼び出し履歴
 
 **Phase 2（スキーマのみ、実装は将来）**:
+
 - `project_groups`, `project_group_mappings`: Gitワークツリー対応
 - `error_patterns`, `error_occurrences`: エラーパターン検出
 - `period_statistics`: 期間別統計キャッシュ
@@ -496,6 +516,7 @@ curl -X POST http://localhost:8080/api/analyze
 ```
 
 **同期の挙動**:
+
 - 既存のセッションは自動的にスキップ（重複なし）
 - 新しいセッションのみがDBに追加される
 - エラーが発生しても処理は継続される
@@ -521,17 +542,20 @@ curl -X POST http://localhost:8080/api/analyze
    - 不要なデータを削除したい場合は、手動でデータベースファイルを削除して再構築してください
 
 **メリット**:
+
 - 過去のすべてのセッション履歴を保持できる
 - 削除されたワークツリーのデータも分析可能
 - ログファイルのローテーション後もデータが残る
 
 **注意点**:
+
 - データベースサイズは時間とともに増加し続けます
 - 定期的にデータベースファイルを確認し、必要に応じて再構築することを推奨します
 
 ### データベースファイルの場所
 
 デフォルトのデータベースパス:
+
 - **macOS/Linux**: `~/.claude/ccloganalysis.db`
 - **Windows**: `C:\Users\{username}\.claude\ccloganalysis.db`
 
