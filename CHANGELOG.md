@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.2] - 2026-01-29
+
+### Fixed
+- ProjectsPageのグラフの時系列方向を修正（Issue #19）
+  - 左が古い日付、右が新しい日付の正しい順序に修正
+
+### Added
+- ProjectsPageのテストスイート追加（全50テスト）
+
+---
+
 ## [0.4.1] - 2026-01-29
 
 ### Fixed
