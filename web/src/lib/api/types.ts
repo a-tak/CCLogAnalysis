@@ -3,6 +3,7 @@
 export interface Project {
   name: string
   decodedPath: string
+  displayName: string
   sessionCount: number
 }
 
@@ -148,6 +149,7 @@ export interface TimeSeriesResponse {
 export interface ProjectGroup {
   id: number
   name: string
+  displayName: string
   gitRoot: string | null
   createdAt: string
   updatedAt: string
@@ -160,6 +162,7 @@ export interface ProjectGroupListResponse {
 export interface ProjectGroupDetail {
   id: number
   name: string
+  displayName: string
   gitRoot: string | null
   createdAt: string
   updatedAt: string

@@ -268,7 +268,7 @@ export function ProjectsPage() {
                         <CardHeader>
                           <CardTitle className="text-lg flex items-center gap-2">
                             <GitBranch className="h-5 w-5" />
-                            {group.name}
+                            {group.displayName}
                           </CardTitle>
                           <CardDescription className="text-xs">
                             <div className="truncate" title={group.gitRoot || undefined}>
@@ -327,7 +327,7 @@ export function ProjectsPage() {
                             className="text-primary hover:underline flex items-center gap-2"
                           >
                             <Folder className="h-4 w-4" />
-                            {project.name}
+                            {project.displayName}
                           </Link>
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">

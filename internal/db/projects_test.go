@@ -395,3 +395,128 @@ func TestLastScanTime(t *testing.T) {
 		}
 	})
 }
+
+func TestGetProjectWorkingDirectory(t *testing.T) {
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	t.Run("正常にcwdを取得できる", func(t *testing.T) {
+		// プロジェクト作成
+		name := "cwd-test-project"
+		decodedPath := "/path/to/cwd-test-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// テストセッション作成
+		session := createTestSession("cwd-test")
+		session.ProjectPath = decodedPath
+		session.Entries[0].Cwd = "/actual/working/directory"
+		session.Entries[1].Cwd = "/actual/working/directory"
+
+		err = db.CreateSession(session, name, time.Now())
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// cwdを取得
+		cwd, err := db.GetProjectWorkingDirectory(projectID)
+		if err != nil {
+			t.Fatalf("Failed to get working directory: %v", err)
+		}
+
+		expected := "/actual/working/directory"
+		if cwd != expected {
+			t.Errorf("Expected cwd=%s, got %s", expected, cwd)
+		}
+	})
+
+	t.Run("セッションが存在しない場合はエラーを返す", func(t *testing.T) {
+		// プロジェクト作成（セッションなし）
+		name := "no-session-project"
+		decodedPath := "/path/to/no-session-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// セッションなしでcwd取得を試みる
+		_, err = db.GetProjectWorkingDirectory(projectID)
+		if err == nil {
+			t.Error("Expected error for project without sessions, got nil")
+		}
+	})
+
+	t.Run("cwdが空の場合はエラーを返す", func(t *testing.T) {
+		// プロジェクト作成
+		name := "empty-cwd-project"
+		decodedPath := "/path/to/empty-cwd-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// cwdが空のセッション作成
+		session := createTestSession("empty-cwd")
+		session.ProjectPath = decodedPath
+		session.Entries[0].Cwd = ""
+		session.Entries[1].Cwd = ""
+
+		err = db.CreateSession(session, name, time.Now())
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+
+		// cwdが空の場合はエラー
+		_, err = db.GetProjectWorkingDirectory(projectID)
+		if err == nil {
+			t.Error("Expected error for empty cwd, got nil")
+		}
+	})
+
+	t.Run("複数セッションがある場合は最新のcwdを返す", func(t *testing.T) {
+		// プロジェクト作成
+		name := "multi-session-project"
+		decodedPath := "/path/to/multi-session-project"
+		projectID, err := db.CreateProject(name, decodedPath)
+		if err != nil {
+			t.Fatalf("Failed to create project: %v", err)
+		}
+
+		// 古いセッション作成
+		oldSession := createTestSession("old")
+		oldSession.ProjectPath = decodedPath
+		oldSession.Entries[0].Cwd = "/old/working/directory"
+		oldSession.Entries[0].Timestamp = time.Now().Add(-2 * time.Hour)
+		oldSession.StartTime = time.Now().Add(-2 * time.Hour)
+
+		err = db.CreateSession(oldSession, name, time.Now().Add(-2*time.Hour))
+		if err != nil {
+			t.Fatalf("Failed to create old session: %v", err)
+		}
+
+		// 新しいセッション作成
+		newSession := createTestSession("new")
+		newSession.ProjectPath = decodedPath
+		newSession.Entries[0].Cwd = "/new/working/directory"
+		newSession.Entries[0].Timestamp = time.Now().Add(-1 * time.Hour)
+		newSession.StartTime = time.Now().Add(-1 * time.Hour)
+
+		err = db.CreateSession(newSession, name, time.Now().Add(-1*time.Hour))
+		if err != nil {
+			t.Fatalf("Failed to create new session: %v", err)
+		}
+
+		// 最新セッションのcwdが返されることを確認
+		cwd, err := db.GetProjectWorkingDirectory(projectID)
+		if err != nil {
+			t.Fatalf("Failed to get working directory: %v", err)
+		}
+
+		expected := "/new/working/directory"
+		if cwd != expected {
+			t.Errorf("Expected cwd=%s, got %s", expected, cwd)
+		}
+	})
+}

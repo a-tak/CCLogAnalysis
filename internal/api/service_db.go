@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"time"
 
@@ -32,6 +33,31 @@ func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessi
 	return service
 }
 
+// getProjectDisplayName returns the display name for a project
+// Falls back to the encoded name if working directory cannot be retrieved
+func (s *DatabaseSessionService) getProjectDisplayName(projectID int64, fallbackName string) string {
+	if cwd, err := s.db.GetProjectWorkingDirectory(projectID); err == nil {
+		return filepath.Base(cwd)
+	}
+	return fallbackName
+}
+
+// getGroupDisplayName returns the display name for a project group
+// Priority: 1. gitRoot base name, 2. first project's cwd base name, 3. fallback name
+func (s *DatabaseSessionService) getGroupDisplayName(gitRoot *string, projectRows []*db.ProjectRow, fallbackName string) string {
+	// git_root から displayName を取得
+	if gitRoot != nil && *gitRoot != "" {
+		return filepath.Base(*gitRoot)
+	}
+	// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
+	if len(projectRows) > 0 {
+		if cwd, err := s.db.GetProjectWorkingDirectory(projectRows[0].ID); err == nil {
+			return filepath.Base(cwd)
+		}
+	}
+	return fallbackName
+}
+
 // ListProjects returns all available projects from the database
 func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 	projectRows, err := s.db.ListProjects()
@@ -51,6 +77,7 @@ func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
+			DisplayName:  s.getProjectDisplayName(row.ID, row.Name),
 			SessionCount: sessionCount,
 		})
 	}
@@ -340,16 +367,29 @@ func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, er
 	// 5. フィルタリング
 	groups := make([]ProjectGroupResponse, 0, len(groupRows))
 	for _, row := range groupRows {
-		// 除外対象でない場合のみ追加
-		if !hiddenMap[row.ID] {
-			groups = append(groups, ProjectGroupResponse{
-				ID:        row.ID,
-				Name:      row.Name,
-				GitRoot:   row.GitRoot,
-				CreatedAt: row.CreatedAt,
-				UpdatedAt: row.UpdatedAt,
-			})
+		// 除外対象はスキップ
+		if hiddenMap[row.ID] {
+			continue
 		}
+
+		projects, err := s.db.GetProjectsByGroupID(row.ID)
+		if err != nil {
+			s.logger.WarnWithContext("Failed to get projects for group", map[string]interface{}{
+				"group_id": row.ID,
+				"error":    err.Error(),
+			})
+			projects = []*db.ProjectRow{}
+		}
+		displayName := s.getGroupDisplayName(row.GitRoot, projects, row.Name)
+
+		groups = append(groups, ProjectGroupResponse{
+			ID:          row.ID,
+			Name:        row.Name,
+			DisplayName: displayName,
+			GitRoot:     row.GitRoot,
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+		})
 	}
 
 	// 6. ソート: git_rootが設定されているグループを先頭に、その後は名前順
@@ -400,17 +440,21 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
+			DisplayName:  s.getProjectDisplayName(row.ID, row.Name),
 			SessionCount: sessionCount,
 		})
 	}
 
+	displayName := s.getGroupDisplayName(group.GitRoot, projectRows, group.Name)
+
 	return &ProjectGroupDetailResponse{
-		ID:        group.ID,
-		Name:      group.Name,
-		GitRoot:   group.GitRoot,
-		CreatedAt: group.CreatedAt,
-		UpdatedAt: group.UpdatedAt,
-		Projects:  projects,
+		ID:          group.ID,
+		Name:        group.Name,
+		DisplayName: displayName,
+		GitRoot:     group.GitRoot,
+		CreatedAt:   group.CreatedAt,
+		UpdatedAt:   group.UpdatedAt,
+		Projects:    projects,
 	}, nil
 }
 
