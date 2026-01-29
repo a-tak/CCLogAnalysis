@@ -111,7 +111,7 @@ export function ProjectsPage() {
           {loading && <LoadingSpinner />}
           {!loading && timeline && timeline.data.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={[...timeline.data].reverse()}>
+              <LineChart data={timeline.data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="periodStart"
