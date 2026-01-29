@@ -354,6 +354,15 @@ func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, er
 			displayName := row.Name // デフォルトはエンコード済み名前
 			if row.GitRoot != nil && *row.GitRoot != "" {
 				displayName = filepath.Base(*row.GitRoot)
+			} else {
+				// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
+				projects, err := s.db.GetProjectsByGroupID(row.ID)
+				if err == nil && len(projects) > 0 {
+					// 最初のプロジェクトの cwd を取得
+					if cwd, err := s.db.GetProjectWorkingDirectory(projects[0].ID); err == nil {
+						displayName = filepath.Base(cwd)
+					}
+				}
 			}
 
 			groups = append(groups, ProjectGroupResponse{
@@ -430,6 +439,11 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 	displayName := group.Name // デフォルトはエンコード済み名前
 	if group.GitRoot != nil && *group.GitRoot != "" {
 		displayName = filepath.Base(*group.GitRoot)
+	} else if len(projectRows) > 0 {
+		// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
+		if cwd, err := s.db.GetProjectWorkingDirectory(projectRows[0].ID); err == nil {
+			displayName = filepath.Base(cwd)
+		}
 	}
 
 	return &ProjectGroupDetailResponse{
