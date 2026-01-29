@@ -219,34 +219,21 @@ func (db *DB) GetProjectLastScanTime(projectID int64) (*time.Time, error) {
 
 // GetProjectWorkingDirectory returns the working directory from the most recent session
 func (db *DB) GetProjectWorkingDirectory(projectID int64) (string, error) {
-	// 最新セッションのIDを取得
-	var sessionID string
-	sessionQuery := `
-		SELECT id
-		FROM sessions
-		WHERE project_id = ?
-		ORDER BY start_time DESC
+	// サブクエリで最新セッションのcwdを取得（1回のクエリで実行）
+	query := `
+		SELECT le.cwd
+		FROM log_entries le
+		INNER JOIN sessions s ON le.session_id = s.id
+		WHERE s.project_id = ?
+		  AND le.cwd IS NOT NULL
+		  AND le.cwd != ''
+		ORDER BY s.start_time DESC
 		LIMIT 1
 	`
-	err := db.conn.QueryRow(sessionQuery, projectID).Scan(&sessionID)
-	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("no sessions found for project")
-	}
-	if err != nil {
-		return "", fmt.Errorf("failed to get latest session: %w", err)
-	}
-
-	// 最新セッションのログエントリからcwdを取得
 	var cwd string
-	cwdQuery := `
-		SELECT cwd
-		FROM log_entries
-		WHERE session_id = ? AND cwd IS NOT NULL AND cwd != ''
-		LIMIT 1
-	`
-	err = db.conn.QueryRow(cwdQuery, sessionID).Scan(&cwd)
+	err := db.conn.QueryRow(query, projectID).Scan(&cwd)
 	if err == sql.ErrNoRows {
-		return "", fmt.Errorf("no cwd found in session")
+		return "", fmt.Errorf("no cwd found for project")
 	}
 	if err != nil {
 		return "", fmt.Errorf("failed to get cwd: %w", err)

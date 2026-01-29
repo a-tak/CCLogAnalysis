@@ -33,6 +33,31 @@ func NewDatabaseSessionService(database *db.DB, p *parser.Parser) *DatabaseSessi
 	return service
 }
 
+// getProjectDisplayName returns the display name for a project
+// Falls back to the encoded name if working directory cannot be retrieved
+func (s *DatabaseSessionService) getProjectDisplayName(projectID int64, fallbackName string) string {
+	if cwd, err := s.db.GetProjectWorkingDirectory(projectID); err == nil {
+		return filepath.Base(cwd)
+	}
+	return fallbackName
+}
+
+// getGroupDisplayName returns the display name for a project group
+// Priority: 1. gitRoot base name, 2. first project's cwd base name, 3. fallback name
+func (s *DatabaseSessionService) getGroupDisplayName(gitRoot *string, projectRows []*db.ProjectRow, fallbackName string) string {
+	// git_root から displayName を取得
+	if gitRoot != nil && *gitRoot != "" {
+		return filepath.Base(*gitRoot)
+	}
+	// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
+	if len(projectRows) > 0 {
+		if cwd, err := s.db.GetProjectWorkingDirectory(projectRows[0].ID); err == nil {
+			return filepath.Base(cwd)
+		}
+	}
+	return fallbackName
+}
+
 // ListProjects returns all available projects from the database
 func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 	projectRows, err := s.db.ListProjects()
@@ -49,16 +74,10 @@ func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 			sessionCount = len(sessions)
 		}
 
-		// 実際の作業ディレクトリから displayName を取得
-		displayName := row.Name // デフォルトはエンコード済み名前
-		if cwd, err := s.db.GetProjectWorkingDirectory(row.ID); err == nil {
-			displayName = filepath.Base(cwd)
-		}
-
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
-			DisplayName:  displayName,
+			DisplayName:  s.getProjectDisplayName(row.ID, row.Name),
 			SessionCount: sessionCount,
 		})
 	}
@@ -348,32 +367,29 @@ func (s *DatabaseSessionService) ListProjectGroups() ([]ProjectGroupResponse, er
 	// 5. フィルタリング
 	groups := make([]ProjectGroupResponse, 0, len(groupRows))
 	for _, row := range groupRows {
-		// 除外対象でない場合のみ追加
-		if !hiddenMap[row.ID] {
-			// git_root から displayName を取得
-			displayName := row.Name // デフォルトはエンコード済み名前
-			if row.GitRoot != nil && *row.GitRoot != "" {
-				displayName = filepath.Base(*row.GitRoot)
-			} else {
-				// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
-				projects, err := s.db.GetProjectsByGroupID(row.ID)
-				if err == nil && len(projects) > 0 {
-					// 最初のプロジェクトの cwd を取得
-					if cwd, err := s.db.GetProjectWorkingDirectory(projects[0].ID); err == nil {
-						displayName = filepath.Base(cwd)
-					}
-				}
-			}
-
-			groups = append(groups, ProjectGroupResponse{
-				ID:          row.ID,
-				Name:        row.Name,
-				DisplayName: displayName,
-				GitRoot:     row.GitRoot,
-				CreatedAt:   row.CreatedAt,
-				UpdatedAt:   row.UpdatedAt,
-			})
+		// 除外対象はスキップ
+		if hiddenMap[row.ID] {
+			continue
 		}
+
+		projects, err := s.db.GetProjectsByGroupID(row.ID)
+		if err != nil {
+			s.logger.WarnWithContext("Failed to get projects for group", map[string]interface{}{
+				"group_id": row.ID,
+				"error":    err.Error(),
+			})
+			projects = []*db.ProjectRow{}
+		}
+		displayName := s.getGroupDisplayName(row.GitRoot, projects, row.Name)
+
+		groups = append(groups, ProjectGroupResponse{
+			ID:          row.ID,
+			Name:        row.Name,
+			DisplayName: displayName,
+			GitRoot:     row.GitRoot,
+			CreatedAt:   row.CreatedAt,
+			UpdatedAt:   row.UpdatedAt,
+		})
 	}
 
 	// 6. ソート: git_rootが設定されているグループを先頭に、その後は名前順
@@ -421,30 +437,15 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 			sessionCount = 0
 		}
 
-		// 実際の作業ディレクトリから displayName を取得
-		displayName := row.Name // デフォルトはエンコード済み名前
-		if cwd, err := s.db.GetProjectWorkingDirectory(row.ID); err == nil {
-			displayName = filepath.Base(cwd)
-		}
-
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
-			DisplayName:  displayName,
+			DisplayName:  s.getProjectDisplayName(row.ID, row.Name),
 			SessionCount: sessionCount,
 		})
 	}
 
-	// git_root から displayName を取得
-	displayName := group.Name // デフォルトはエンコード済み名前
-	if group.GitRoot != nil && *group.GitRoot != "" {
-		displayName = filepath.Base(*group.GitRoot)
-	} else if len(projectRows) > 0 {
-		// git_root がない場合、グループに属するプロジェクトの cwd から取得を試みる
-		if cwd, err := s.db.GetProjectWorkingDirectory(projectRows[0].ID); err == nil {
-			displayName = filepath.Base(cwd)
-		}
-	}
+	displayName := s.getGroupDisplayName(group.GitRoot, projectRows, group.Name)
 
 	return &ProjectGroupDetailResponse{
 		ID:          group.ID,
