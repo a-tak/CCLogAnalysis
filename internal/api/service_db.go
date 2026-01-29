@@ -51,6 +51,7 @@ func (s *DatabaseSessionService) ListProjects() ([]ProjectResponse, error) {
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
+			DisplayName:  extractDisplayName(row.DecodedPath),
 			SessionCount: sessionCount,
 		})
 	}
@@ -400,6 +401,7 @@ func (s *DatabaseSessionService) GetProjectGroup(groupID int64) (*ProjectGroupDe
 		projects = append(projects, ProjectResponse{
 			Name:         row.Name,
 			DecodedPath:  row.DecodedPath,
+			DisplayName:  extractDisplayName(row.DecodedPath),
 			SessionCount: sessionCount,
 		})
 	}

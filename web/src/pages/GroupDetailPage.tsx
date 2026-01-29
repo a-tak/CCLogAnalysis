@@ -329,7 +329,7 @@ export default function GroupDetailPage() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Folder className="h-4 w-4" />
-                        {project.name}
+                        {project.displayName}
                       </CardTitle>
                       <CardDescription className="text-xs truncate">
                         {project.decodedPath}

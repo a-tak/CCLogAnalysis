@@ -3,6 +3,7 @@
 export interface Project {
   name: string
   decodedPath: string
+  displayName: string
   sessionCount: number
 }
 

@@ -327,7 +327,7 @@ export function ProjectsPage() {
                             className="text-primary hover:underline flex items-center gap-2"
                           >
                             <Folder className="h-4 w-4" />
-                            {project.name}
+                            {project.displayName}
                           </Link>
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">

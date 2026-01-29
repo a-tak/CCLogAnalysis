@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // writeJSONError writes an error response with the specified status code
@@ -49,4 +51,26 @@ func parseLimitParam(r *http.Request, defaultLimit int) (int, error) {
 		return 0, fmt.Errorf("limit must be a positive integer")
 	}
 	return limit, nil
+}
+
+// extractDisplayName extracts the last folder name from a decoded path
+// Example: "C:/Users/username/projects/my-project" -> "my-project"
+func extractDisplayName(decodedPath string) string {
+	if decodedPath == "" {
+		return ""
+	}
+
+	// Normalize path separators
+	normalized := filepath.ToSlash(decodedPath)
+
+	// Remove trailing slash if present
+	normalized = strings.TrimSuffix(normalized, "/")
+
+	// Extract last component
+	parts := strings.Split(normalized, "/")
+	if len(parts) == 0 {
+		return decodedPath
+	}
+
+	return parts[len(parts)-1]
 }

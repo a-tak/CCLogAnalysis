@@ -30,6 +30,7 @@ type HealthResponse struct {
 type ProjectResponse struct {
 	Name         string `json:"name"`
 	DecodedPath  string `json:"decodedPath"`
+	DisplayName  string `json:"displayName"`
 	SessionCount int    `json:"sessionCount"`
 }
 
