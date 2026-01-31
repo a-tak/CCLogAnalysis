@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.4.3] - 2026-01-31
+
+### Fixed
+- グラフの時系列方向を完全修正（Issue #21）
+  - 全ページ（Projects、ProjectDetail、GroupDetail）でソート順を昇順に統一
+  - 不正な日付（0001-01-01）をグラフから除外
+  - テストケースも正しい順序に修正
+
+### Changed
+- 不要なドキュメントファイルとプランファイルを削除
+- READMEの更新
+
+---
+
 ## [0.4.2] - 2026-01-29
 
 ### Fixed
