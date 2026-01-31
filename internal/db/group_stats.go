@@ -130,9 +130,9 @@ func (db *DB) GetGroupTimeSeriesStats(groupID int64, period string, limit int) (
 		FROM project_group_mappings pgm
 		INNER JOIN projects p ON pgm.project_id = p.id
 		INNER JOIN sessions s ON p.id = s.project_id
-		WHERE pgm.group_id = ?
+		WHERE pgm.group_id = ? AND s.start_time > '0001-01-02'  -- SQLiteの最小日付より後のデータのみを対象
 		GROUP BY period_group
-		ORDER BY period_start DESC
+		ORDER BY period_start ASC
 		LIMIT ?
 	`, dateFormat)
 
