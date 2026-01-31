@@ -273,6 +273,64 @@ tail -f .claude/skills/server-management/server.log
 - `FILE_WATCH_INTERVAL=15`
 - `FILE_WATCH_DEBOUNCE=5`
 
+### Claude Codeスキル
+
+開発を効率化するための Claude Code スキルを提供しています。
+
+#### リリース作成（/release）
+
+前回のリリースからの差分を自動分析し、CHANGELOGを更新してGitHubリリースを作成します。
+
+```bash
+# 自動でバージョン番号を判定してリリース作成
+/release
+
+# バージョン番号を指定してリリース作成
+/release 0.5.0
+
+# セマンティックバージョニング指定
+/release patch  # パッチバージョンアップ（0.4.3 → 0.4.4）
+/release minor  # マイナーバージョンアップ（0.4.3 → 0.5.0）
+/release major  # メジャーバージョンアップ（0.4.3 → 1.0.0）
+```
+
+**処理内容:**
+1. 前回リリースからのコミット差分を確認
+2. コミット内容を分析してセマンティックバージョニングに基づいてバージョン判定
+3. CHANGELOG.md を更新
+4. GitHubリリースノートを自動生成
+5. コミット・タグ作成・Push
+6. GitHubリリース作成
+
+詳細は `.claude/skills/release/SKILL.md` を参照してください。
+
+#### ワークツリー作成（/cr-worktree）
+
+Issue番号やブランチ名を指定してワークツリーを作成し、Claude Codeを起動します。
+
+```bash
+# Issue番号指定 → /issueコマンドを自動実行
+/cr-worktree 123
+
+# ブランチ名指定
+/cr-worktree feature/new-feature
+
+# 説明文から自動生成
+/cr-worktree "ログパーサーのバグ修正"
+```
+
+#### サーバー管理（/server-management）
+
+Claude Codeからサーバーの起動・停止を実行します。
+
+```bash
+# 開発モードで起動
+/server-management start dev
+
+# 停止
+/server-management stop
+```
+
 ### バックエンド開発
 
 サーバーを起動（フロントエンド埋め込み版）：
