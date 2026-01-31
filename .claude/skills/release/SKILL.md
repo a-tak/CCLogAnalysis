@@ -1,4 +1,5 @@
 ---
+model: claude-haiku-4-5
 name: release
 description: GitHubリリースを自動作成。前回リリースからの差分を分析し、CHANGELOGを更新してリリースを作成します。
 argument-hint: [patch|minor|major|version]
