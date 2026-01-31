@@ -276,17 +276,17 @@ func TestGetTimeSeriesStats(t *testing.T) {
 		t.Fatalf("Expected 3 days, got %d", len(timeSeriesStats))
 	}
 
-	// 降順ソート（新しい順）なので、最初は2026-01-22
+	// 昇順ソート（古い順）なので、最初は2026-01-20
 	day1 := timeSeriesStats[0]
-	expectedDate1 := time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)
+	expectedDate1 := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
 	if !day1.PeriodStart.Equal(expectedDate1) {
 		t.Errorf("Expected period start %v, got %v", expectedDate1, day1.PeriodStart)
 	}
-	if day1.SessionCount != 1 {
-		t.Errorf("Expected 1 session on 2026-01-22, got %d", day1.SessionCount)
+	if day1.SessionCount != 2 {
+		t.Errorf("Expected 2 sessions on 2026-01-20, got %d", day1.SessionCount)
 	}
-	if day1.TotalInputTokens != 500 {
-		t.Errorf("Expected 500 tokens on 2026-01-22, got %d", day1.TotalInputTokens)
+	if day1.TotalInputTokens != 2500 {
+		t.Errorf("Expected 2500 tokens on 2026-01-20, got %d", day1.TotalInputTokens)
 	}
 
 	// 2番目は2026-01-21
@@ -302,17 +302,17 @@ func TestGetTimeSeriesStats(t *testing.T) {
 		t.Errorf("Expected 2000 tokens on 2026-01-21, got %d", day2.TotalInputTokens)
 	}
 
-	// 3番目は2026-01-20（2セッション）
+	// 3番目は2026-01-22（1セッション）
 	day3 := timeSeriesStats[2]
-	expectedDate3 := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+	expectedDate3 := time.Date(2026, 1, 22, 0, 0, 0, 0, time.UTC)
 	if !day3.PeriodStart.Equal(expectedDate3) {
 		t.Errorf("Expected period start %v, got %v", expectedDate3, day3.PeriodStart)
 	}
-	if day3.SessionCount != 2 {
-		t.Errorf("Expected 2 sessions on 2026-01-20, got %d", day3.SessionCount)
+	if day3.SessionCount != 1 {
+		t.Errorf("Expected 1 session on 2026-01-22, got %d", day3.SessionCount)
 	}
-	if day3.TotalInputTokens != 2500 {
-		t.Errorf("Expected 2500 tokens on 2026-01-20, got %d", day3.TotalInputTokens)
+	if day3.TotalInputTokens != 500 {
+		t.Errorf("Expected 500 tokens on 2026-01-22, got %d", day3.TotalInputTokens)
 	}
 }
 

@@ -215,9 +215,9 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 			COALESCE(SUM(total_cache_creation_tokens), 0) as total_cache_creation_tokens,
 			COALESCE(SUM(total_cache_read_tokens), 0) as total_cache_read_tokens
 		FROM sessions
-		WHERE project_id = ?
+		WHERE project_id = ? AND start_time > '0001-01-02'  -- SQLiteの最小日付より後のデータのみを対象
 		GROUP BY period_group
-		ORDER BY period_start DESC
+		ORDER BY period_start ASC
 		LIMIT ?
 	`, dateFormat)
 
