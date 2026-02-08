@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-02-08
+
+### Added
+- GitHubリリース自動作成スキル
+  - 前回リリースからの差分を分析してCHANGELOGを更新
+  - セマンティックバージョニング対応（patch/minor/major）
+  - GitHubリリースノート自動生成
+
+### Fixed
+- タイムラインAPIで最新30日分のデータを取得するよう修正
+  - ダッシュボードが1月26日から更新されない問題を解消
+  - SQLクエリを降順ソートに変更し、結果を逆順に並び替え
+  - 3つのタイムライン関数を修正
+- リリーススキルの実行モデルをclaude-haiku-4-5に設定
+
+---
+
 ## [0.4.3] - 2026-01-31
 
 ### Fixed
