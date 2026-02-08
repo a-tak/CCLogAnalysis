@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-02-08
+
+### Added
+- 跨日セッション集計対応
+  - 日付をまたいで実行されたセッションが、実行されていた全ての日の統計に含まれるよう改善
+  - `generateDateRange`: セッションがカバーする日付リストを生成する関数を追加
+  - `sessionCoversDate`: セッションが指定日に実行されていたかチェックする関数を追加
+  - 跨日セッション、複数日セッション、日付境界セッションの包括的なテストを追加
+
+### Changed
+- GetProjectDailySessions: WHERE句を修正して跨日セッションを含める
+- GetDailyGroupStats: WHERE句を修正して跨日セッションを含める
+- GetTimeSeriesStats: Go側でセッションを日付ごとに展開して集約
+- GetTotalTimeSeriesStats: GetTimeSeriesStatsと同様の方針で修正
+
+### Documentation
+- API設計書に跨日セッションの挙動を詳細に説明
+  - トークンの重複カウントについて明記
+  - 影響を受けるエンドポイントをリスト化
+
+---
+
 ## [0.5.0] - 2026-02-08
 
 ### Added
