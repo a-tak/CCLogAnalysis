@@ -217,7 +217,7 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 		FROM sessions
 		WHERE project_id = ? AND start_time > '0001-01-02'  -- SQLiteの最小日付より後のデータのみを対象
 		GROUP BY period_group
-		ORDER BY period_start ASC
+		ORDER BY period_start DESC
 		LIMIT ?
 	`, dateFormat)
 
@@ -267,6 +267,11 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating time series stats: %w", err)
+	}
+
+	// 結果を逆順に並び替え（古い順にする）
+	for i, j := 0, len(timeSeriesStats)-1; i < j; i, j = i+1, j-1 {
+		timeSeriesStats[i], timeSeriesStats[j] = timeSeriesStats[j], timeSeriesStats[i]
 	}
 
 	return timeSeriesStats, nil
