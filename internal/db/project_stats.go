@@ -190,91 +190,217 @@ func (db *DB) GetTimeSeriesStats(projectID int64, period string, limit int) ([]T
 		limit = 30
 	}
 
-	// 期間ごとのグループ化SQL
-	var dateFormat string
-	switch period {
-	case "day":
-		dateFormat = "%Y-%m-%d"
-	case "week":
-		// SQLiteのweek開始日は日曜日
-		dateFormat = "%Y-%W"
-	case "month":
-		dateFormat = "%Y-%m"
-	default:
+	// 期間の検証
+	if period != "day" && period != "week" && period != "month" {
 		return nil, fmt.Errorf("invalid period: %s (must be day, week, or month)", period)
 	}
 
-	query := fmt.Sprintf(`
+	// セッションを取得（広めの期間で取得）
+	// limitの期間分のデータを取得するため、start_timeベースで範囲を広めに取る
+	query := `
 		SELECT
-			STRFTIME('%s', start_time) as period_group,
-			MIN(DATE(start_time)) as period_start,
-			MAX(DATE(start_time)) as period_end,
-			COUNT(*) as session_count,
-			COALESCE(SUM(total_input_tokens), 0) as total_input_tokens,
-			COALESCE(SUM(total_output_tokens), 0) as total_output_tokens,
-			COALESCE(SUM(total_cache_creation_tokens), 0) as total_cache_creation_tokens,
-			COALESCE(SUM(total_cache_read_tokens), 0) as total_cache_read_tokens
+			id, project_id, git_branch, start_time, end_time, duration_seconds,
+			total_input_tokens, total_output_tokens,
+			total_cache_creation_tokens, total_cache_read_tokens,
+			error_count, first_user_message, created_at, updated_at
 		FROM sessions
-		WHERE project_id = ? AND start_time > '0001-01-02'  -- SQLiteの最小日付より後のデータのみを対象
-		GROUP BY period_group
-		ORDER BY period_start DESC
-		LIMIT ?
-	`, dateFormat)
+		WHERE project_id = ? AND start_time > '0001-01-02'
+		ORDER BY start_time DESC
+	`
 
-	rows, err := db.conn.Query(query, projectID, limit)
+	rows, err := db.conn.Query(query, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query time series stats: %w", err)
+		return nil, fmt.Errorf("failed to query sessions: %w", err)
 	}
 	defer rows.Close()
 
-	var timeSeriesStats []TimeSeriesStats
+	var sessions []SessionRow
 	for rows.Next() {
-		var stats TimeSeriesStats
-		var periodGroup sql.NullString
-		var periodStartStr, periodEndStr sql.NullString
+		var s SessionRow
+		var startTimeStr, endTimeStr, createdAtStr, updatedAtStr string
+		var firstUserMsg sql.NullString
 
 		err := rows.Scan(
-			&periodGroup,
-			&periodStartStr,
-			&periodEndStr,
-			&stats.SessionCount,
-			&stats.TotalInputTokens,
-			&stats.TotalOutputTokens,
-			&stats.TotalCacheCreationTokens,
-			&stats.TotalCacheReadTokens,
+			&s.ID,
+			&s.ProjectID,
+			&s.GitBranch,
+			&startTimeStr,
+			&endTimeStr,
+			&s.DurationSeconds,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalCacheCreationTokens,
+			&s.TotalCacheReadTokens,
+			&s.ErrorCount,
+			&firstUserMsg,
+			&createdAtStr,
+			&updatedAtStr,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan time series stats: %w", err)
+			return nil, fmt.Errorf("failed to scan session: %w", err)
 		}
 
-		// NULL値をスキップ
-		if !periodStartStr.Valid || !periodEndStr.Valid {
-			continue
+		s.StartTime, _ = time.Parse(time.RFC3339Nano, startTimeStr)
+		s.EndTime, _ = time.Parse(time.RFC3339Nano, endTimeStr)
+		s.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr)
+		s.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAtStr)
+		if firstUserMsg.Valid {
+			s.FirstUserMessage = firstUserMsg.String
 		}
 
-		// 日付文字列をtime.Timeに変換
-		stats.PeriodStart, err = parseDateTime(periodStartStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse period start: %w", err)
-		}
-		stats.PeriodEnd, err = parseDateTime(periodEndStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse period end: %w", err)
-		}
-
-		timeSeriesStats = append(timeSeriesStats, stats)
+		sessions = append(sessions, s)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating time series stats: %w", err)
+		return nil, fmt.Errorf("error iterating sessions: %w", err)
 	}
 
-	// 結果を逆順に並び替え（古い順にする）
-	for i, j := 0, len(timeSeriesStats)-1; i < j; i, j = i+1, j-1 {
-		timeSeriesStats[i], timeSeriesStats[j] = timeSeriesStats[j], timeSeriesStats[i]
+	// セッションを日付ごとに展開して集約
+	return aggregateSessionsByPeriod(sessions, period, limit), nil
+}
+
+// aggregateSessionsByPeriod セッションを期間ごとに集約
+func aggregateSessionsByPeriod(sessions []SessionRow, period string, limit int) []TimeSeriesStats {
+	// 日付ごとにセッションを展開
+	type dailySession struct {
+		date    string
+		session SessionRow
+	}
+	var dailySessions []dailySession
+
+	for _, s := range sessions {
+		dates := generateDateRange(s.StartTime, s.EndTime)
+		for _, date := range dates {
+			dailySessions = append(dailySessions, dailySession{date: date, session: s})
+		}
 	}
 
-	return timeSeriesStats, nil
+	// 期間ごとにグループ化
+	periodMap := make(map[string]*TimeSeriesStats)
+	periodSessions := make(map[string]map[string]bool) // 各期間に含まれるセッションID
+
+	for _, ds := range dailySessions {
+		periodKey := getPeriodKey(ds.date, period)
+
+		if _, exists := periodMap[periodKey]; !exists {
+			periodMap[periodKey] = &TimeSeriesStats{
+				SessionCount:             0,
+				TotalInputTokens:         0,
+				TotalOutputTokens:        0,
+				TotalCacheCreationTokens: 0,
+				TotalCacheReadTokens:     0,
+			}
+			periodSessions[periodKey] = make(map[string]bool)
+		}
+
+		// セッションIDの重複チェック（同じ期間内で同じセッションは1回だけカウント）
+		if !periodSessions[periodKey][ds.session.ID] {
+			periodMap[periodKey].SessionCount++
+			periodMap[periodKey].TotalInputTokens += ds.session.TotalInputTokens
+			periodMap[periodKey].TotalOutputTokens += ds.session.TotalOutputTokens
+			periodMap[periodKey].TotalCacheCreationTokens += ds.session.TotalCacheCreationTokens
+			periodMap[periodKey].TotalCacheReadTokens += ds.session.TotalCacheReadTokens
+			periodSessions[periodKey][ds.session.ID] = true
+		}
+	}
+
+	// 期間キーをソートして時系列データに変換
+	var periodKeys []string
+	for key := range periodMap {
+		periodKeys = append(periodKeys, key)
+	}
+
+	// キーをソート（降順）
+	sortPeriodKeys(periodKeys, period)
+
+	// 結果を構築（limitまで）
+	var result []TimeSeriesStats
+	for i, key := range periodKeys {
+		if i >= limit {
+			break
+		}
+
+		stats := periodMap[key]
+		stats.PeriodStart, stats.PeriodEnd = getPeriodRange(key, period)
+		result = append(result, *stats)
+	}
+
+	// 結果を古い順に並び替え
+	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
+		result[i], result[j] = result[j], result[i]
+	}
+
+	return result
+}
+
+// getPeriodKey 日付から期間キーを生成
+func getPeriodKey(date string, period string) string {
+	t, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return date
+	}
+
+	switch period {
+	case "day":
+		return date
+	case "week":
+		// ISO週番号を使用（月曜日始まり）
+		year, week := t.ISOWeek()
+		return fmt.Sprintf("%d-W%02d", year, week)
+	case "month":
+		return t.Format("2006-01")
+	default:
+		return date
+	}
+}
+
+// sortPeriodKeys 期間キーをソート（降順）
+func sortPeriodKeys(keys []string, period string) {
+	// 降順ソート
+	for i := 0; i < len(keys)-1; i++ {
+		for j := i + 1; j < len(keys); j++ {
+			if keys[i] < keys[j] {
+				keys[i], keys[j] = keys[j], keys[i]
+			}
+		}
+	}
+}
+
+// getPeriodRange 期間キーから開始日と終了日を取得
+func getPeriodRange(periodKey string, period string) (time.Time, time.Time) {
+	switch period {
+	case "day":
+		t, _ := time.Parse("2006-01-02", periodKey)
+		return t, t
+	case "week":
+		// ISO週番号から開始日と終了日を計算
+		var year, week int
+		fmt.Sscanf(periodKey, "%d-W%d", &year, &week)
+
+		// その年の1月4日を基準にISO週を計算
+		jan4 := time.Date(year, time.January, 4, 0, 0, 0, 0, time.UTC)
+		// 1月4日が含まれる週の月曜日を取得
+		mondayOffset := int(time.Monday - jan4.Weekday())
+		if mondayOffset > 0 {
+			mondayOffset -= 7
+		}
+		firstMonday := jan4.AddDate(0, 0, mondayOffset)
+
+		// 目的の週の月曜日を計算
+		weekStart := firstMonday.AddDate(0, 0, (week-1)*7)
+		weekEnd := weekStart.AddDate(0, 0, 6)
+
+		return weekStart, weekEnd
+	case "month":
+		t, _ := time.Parse("2006-01", periodKey)
+		// 月の最終日を取得
+		nextMonth := t.AddDate(0, 1, 0)
+		lastDay := nextMonth.AddDate(0, 0, -1)
+		return t, lastDay
+	default:
+		t, _ := time.Parse("2006-01-02", periodKey)
+		return t, t
+	}
 }
 
 // GetProjectDailySessions retrieves sessions for a project on a specific date
@@ -287,11 +413,13 @@ func (db *DB) GetProjectDailySessions(projectID int64, date string) ([]SessionRo
 			total_cache_creation_tokens, total_cache_read_tokens,
 			error_count, first_user_message, created_at, updated_at
 		FROM sessions
-		WHERE project_id = ? AND DATE(start_time) = ?
+		WHERE project_id = ?
+		  AND DATE(start_time) <= ?
+		  AND DATE(end_time) >= ?
 		ORDER BY start_time DESC
 	`
 
-	rows, err := db.conn.Query(query, projectID, date)
+	rows, err := db.conn.Query(query, projectID, date, date)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query project daily sessions: %w", err)
 	}

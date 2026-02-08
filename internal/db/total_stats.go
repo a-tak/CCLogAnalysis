@@ -98,91 +98,72 @@ func (db *DB) GetTotalTimeSeriesStats(period string, limit int) ([]TimeSeriesSta
 		limit = 30
 	}
 
-	// 期間ごとのグループ化SQL
-	var dateFormat string
-	switch period {
-	case "day":
-		dateFormat = "%Y-%m-%d"
-	case "week":
-		// SQLiteのweek開始日は日曜日
-		dateFormat = "%Y-%W"
-	case "month":
-		dateFormat = "%Y-%m"
-	default:
+	// 期間の検証
+	if period != "day" && period != "week" && period != "month" {
 		return nil, fmt.Errorf("invalid period: %s (must be day, week, or month)", period)
 	}
 
-	query := fmt.Sprintf(`
+	// 全プロジェクトのセッションを取得
+	query := `
 		SELECT
-			STRFTIME('%s', start_time) as period_group,
-			MIN(DATE(start_time)) as period_start,
-			MAX(DATE(start_time)) as period_end,
-			COUNT(*) as session_count,
-			COALESCE(SUM(total_input_tokens), 0) as total_input_tokens,
-			COALESCE(SUM(total_output_tokens), 0) as total_output_tokens,
-			COALESCE(SUM(total_cache_creation_tokens), 0) as total_cache_creation_tokens,
-			COALESCE(SUM(total_cache_read_tokens), 0) as total_cache_read_tokens
+			id, project_id, git_branch, start_time, end_time, duration_seconds,
+			total_input_tokens, total_output_tokens,
+			total_cache_creation_tokens, total_cache_read_tokens,
+			error_count, first_user_message, created_at, updated_at
 		FROM sessions
-		WHERE start_time > '0001-01-02'  -- SQLiteの最小日付より後のデータのみを対象
-		GROUP BY period_group
-		ORDER BY period_start DESC
-		LIMIT ?
-	`, dateFormat)
+		WHERE start_time > '0001-01-02'
+		ORDER BY start_time DESC
+	`
 
-	rows, err := db.conn.Query(query, limit)
+	rows, err := db.conn.Query(query)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query total time series stats: %w", err)
+		return nil, fmt.Errorf("failed to query sessions: %w", err)
 	}
 	defer rows.Close()
 
-	var timeSeriesStats []TimeSeriesStats
+	var sessions []SessionRow
 	for rows.Next() {
-		var stats TimeSeriesStats
-		var periodGroup sql.NullString
-		var periodStartStr, periodEndStr sql.NullString
+		var s SessionRow
+		var startTimeStr, endTimeStr, createdAtStr, updatedAtStr string
+		var firstUserMsg sql.NullString
 
 		err := rows.Scan(
-			&periodGroup,
-			&periodStartStr,
-			&periodEndStr,
-			&stats.SessionCount,
-			&stats.TotalInputTokens,
-			&stats.TotalOutputTokens,
-			&stats.TotalCacheCreationTokens,
-			&stats.TotalCacheReadTokens,
+			&s.ID,
+			&s.ProjectID,
+			&s.GitBranch,
+			&startTimeStr,
+			&endTimeStr,
+			&s.DurationSeconds,
+			&s.TotalInputTokens,
+			&s.TotalOutputTokens,
+			&s.TotalCacheCreationTokens,
+			&s.TotalCacheReadTokens,
+			&s.ErrorCount,
+			&firstUserMsg,
+			&createdAtStr,
+			&updatedAtStr,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan total time series stats: %w", err)
+			return nil, fmt.Errorf("failed to scan session: %w", err)
 		}
 
-		// NULL値をスキップ
-		if !periodStartStr.Valid || !periodEndStr.Valid {
-			continue
+		s.StartTime, _ = time.Parse(time.RFC3339Nano, startTimeStr)
+		s.EndTime, _ = time.Parse(time.RFC3339Nano, endTimeStr)
+		s.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAtStr)
+		s.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updatedAtStr)
+		if firstUserMsg.Valid {
+			s.FirstUserMessage = firstUserMsg.String
 		}
 
-		// 日付文字列をtime.Timeに変換
-		stats.PeriodStart, err = parseDateTime(periodStartStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse period start: %w", err)
-		}
-		stats.PeriodEnd, err = parseDateTime(periodEndStr.String)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse period end: %w", err)
-		}
-
-		timeSeriesStats = append(timeSeriesStats, stats)
+		sessions = append(sessions, s)
 	}
 
 	if err = rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating total time series stats: %w", err)
+		return nil, fmt.Errorf("error iterating sessions: %w", err)
 	}
 
-	// 結果を逆順に並び替え（古い順にする）
-	for i, j := 0, len(timeSeriesStats)-1; i < j; i, j = i+1, j-1 {
-		timeSeriesStats[i], timeSeriesStats[j] = timeSeriesStats[j], timeSeriesStats[i]
-	}
-
-	return timeSeriesStats, nil
+	// セッションを日付ごとに展開して集約（project_stats.goのヘルパー関数を再利用）
+	return aggregateSessionsByPeriod(sessions, period, limit), nil
 }
 
 // DailyGroupStats represents statistics for a single group on a specific date
@@ -211,13 +192,14 @@ func (db *DB) GetDailyGroupStats(date string) ([]DailyGroupStats, error) {
 		INNER JOIN project_group_mappings pgm ON pg.id = pgm.group_id
 		INNER JOIN projects p ON pgm.project_id = p.id
 		INNER JOIN sessions s ON p.id = s.project_id
-		WHERE DATE(s.start_time) = ?
+		WHERE DATE(s.start_time) <= ?
+		  AND DATE(s.end_time) >= ?
 		GROUP BY pg.id, pg.name
 		HAVING session_count > 0
 		ORDER BY (total_input_tokens + total_output_tokens) DESC
 	`
 
-	rows, err := db.conn.Query(query, date)
+	rows, err := db.conn.Query(query, date, date)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query daily group stats: %w", err)
 	}

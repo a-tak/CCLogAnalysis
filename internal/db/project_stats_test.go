@@ -316,6 +316,195 @@ func TestGetTimeSeriesStats(t *testing.T) {
 	}
 }
 
+func TestGetTimeSeriesStats_CrossMidnight(t *testing.T) {
+	// テストデータベースの準備
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	// テストプロジェクト作成
+	projectID, err := db.CreateProject("test-project", "/path/to/project")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// 跨日セッションを含むテストデータ
+	sessions := []struct {
+		id           string
+		startTime    time.Time
+		endTime      time.Time
+		inputTokens  int
+		outputTokens int
+	}{
+		{
+			// 1/20 23:00 → 1/21 02:00 (跨日セッション)
+			id:           "session-cross-midnight",
+			startTime:    time.Date(2026, 1, 20, 23, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 21, 2, 0, 0, 0, time.UTC),
+			inputTokens:  1000,
+			outputTokens: 500,
+		},
+		{
+			// 1/20 10:00 → 1/20 15:00 (同日セッション)
+			id:           "session-same-day",
+			startTime:    time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 20, 15, 0, 0, 0, time.UTC),
+			inputTokens:  2000,
+			outputTokens: 1000,
+		},
+		{
+			// 1/20 10:00 → 1/22 15:00 (複数日にまたがるセッション)
+			id:           "session-multi-day",
+			startTime:    time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 22, 15, 0, 0, 0, time.UTC),
+			inputTokens:  3000,
+			outputTokens: 1500,
+		},
+		{
+			// 1/21 10:00 → 1/21 15:00 (通常セッション)
+			id:           "session-normal",
+			startTime:    time.Date(2026, 1, 21, 10, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 21, 15, 0, 0, 0, time.UTC),
+			inputTokens:  1500,
+			outputTokens: 750,
+		},
+	}
+
+	for _, s := range sessions {
+		duration := int(s.endTime.Sub(s.startTime).Seconds())
+		_, err := db.conn.Exec(`
+			INSERT INTO sessions (
+				id, project_id, git_branch, start_time, end_time, duration_seconds,
+				total_input_tokens, total_output_tokens,
+				total_cache_creation_tokens, total_cache_read_tokens,
+				error_count
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, s.id, projectID, "main",
+			s.startTime.Format(time.RFC3339Nano),
+			s.endTime.Format(time.RFC3339Nano),
+			duration,
+			s.inputTokens, s.outputTokens, 0, 0, 0)
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+	}
+
+	t.Run("跨日セッションが各日に含まれる", func(t *testing.T) {
+		// 日別の時系列統計を取得
+		timeSeriesStats, err := db.GetTimeSeriesStats(projectID, "day", 30)
+		if err != nil {
+			t.Fatalf("GetTimeSeriesStats failed: %v", err)
+		}
+
+		// 3日分のデータがあることを確認
+		if len(timeSeriesStats) != 3 {
+			t.Fatalf("Expected 3 days, got %d", len(timeSeriesStats))
+		}
+
+		// 日付ごとのマップを作成
+		dayMap := make(map[string]TimeSeriesStats)
+		for _, stats := range timeSeriesStats {
+			dateStr := stats.PeriodStart.Format("2006-01-02")
+			dayMap[dateStr] = stats
+		}
+
+		// 1/20の検証
+		day20, exists := dayMap["2026-01-20"]
+		if !exists {
+			t.Fatal("Expected data for 2026-01-20")
+		}
+		// 1/20には3つのセッションが含まれる
+		// - session-same-day (同日)
+		// - session-cross-midnight (跨日)
+		// - session-multi-day (複数日)
+		if day20.SessionCount != 3 {
+			t.Errorf("Expected 3 sessions on 2026-01-20, got %d", day20.SessionCount)
+		}
+		expectedTokens20 := 1000 + 2000 + 3000 // cross + same + multi
+		if day20.TotalInputTokens != expectedTokens20 {
+			t.Errorf("Expected %d input tokens on 2026-01-20, got %d", expectedTokens20, day20.TotalInputTokens)
+		}
+
+		// 1/21の検証
+		day21, exists := dayMap["2026-01-21"]
+		if !exists {
+			t.Fatal("Expected data for 2026-01-21")
+		}
+		// 1/21には3つのセッションが含まれる
+		// - session-cross-midnight (跨日)
+		// - session-multi-day (複数日)
+		// - session-normal (通常)
+		if day21.SessionCount != 3 {
+			t.Errorf("Expected 3 sessions on 2026-01-21, got %d", day21.SessionCount)
+		}
+		expectedTokens21 := 1000 + 3000 + 1500 // cross + multi + normal
+		if day21.TotalInputTokens != expectedTokens21 {
+			t.Errorf("Expected %d input tokens on 2026-01-21, got %d", expectedTokens21, day21.TotalInputTokens)
+		}
+
+		// 1/22の検証
+		day22, exists := dayMap["2026-01-22"]
+		if !exists {
+			t.Fatal("Expected data for 2026-01-22")
+		}
+		// 1/22には1つのセッションが含まれる
+		// - session-multi-day (複数日)
+		if day22.SessionCount != 1 {
+			t.Errorf("Expected 1 session on 2026-01-22, got %d", day22.SessionCount)
+		}
+		if day22.TotalInputTokens != 3000 {
+			t.Errorf("Expected 3000 input tokens on 2026-01-22, got %d", day22.TotalInputTokens)
+		}
+	})
+
+	t.Run("週別集計で跨日セッションが正しく処理される", func(t *testing.T) {
+		// 週別の時系列統計を取得
+		weekStats, err := db.GetTimeSeriesStats(projectID, "week", 10)
+		if err != nil {
+			t.Fatalf("GetTimeSeriesStats failed: %v", err)
+		}
+
+		// 全てのセッションが同じ週に含まれるはず（1/20-1/22は同じ週）
+		if len(weekStats) != 1 {
+			t.Fatalf("Expected 1 week, got %d", len(weekStats))
+		}
+
+		// 4つのセッションが含まれるが、各セッションは1回だけカウント
+		if weekStats[0].SessionCount != 4 {
+			t.Errorf("Expected 4 sessions in the week, got %d", weekStats[0].SessionCount)
+		}
+
+		// トークン数の合計
+		expectedTokens := 1000 + 2000 + 3000 + 1500
+		if weekStats[0].TotalInputTokens != expectedTokens {
+			t.Errorf("Expected %d input tokens, got %d", expectedTokens, weekStats[0].TotalInputTokens)
+		}
+	})
+
+	t.Run("月別集計で跨日セッションが正しく処理される", func(t *testing.T) {
+		// 月別の時系列統計を取得
+		monthStats, err := db.GetTimeSeriesStats(projectID, "month", 10)
+		if err != nil {
+			t.Fatalf("GetTimeSeriesStats failed: %v", err)
+		}
+
+		// 全てのセッションが同じ月に含まれる
+		if len(monthStats) != 1 {
+			t.Fatalf("Expected 1 month, got %d", len(monthStats))
+		}
+
+		// 4つのセッションが含まれる
+		if monthStats[0].SessionCount != 4 {
+			t.Errorf("Expected 4 sessions in the month, got %d", monthStats[0].SessionCount)
+		}
+
+		// トークン数の合計
+		expectedTokens := 1000 + 2000 + 3000 + 1500
+		if monthStats[0].TotalInputTokens != expectedTokens {
+			t.Errorf("Expected %d input tokens, got %d", expectedTokens, monthStats[0].TotalInputTokens)
+		}
+	})
+}
+
 // ヘルパー関数：ブランチ統計を検索
 func findBranchStats(stats []BranchStats, branch string) *BranchStats {
 	for _, s := range stats {
@@ -517,6 +706,166 @@ func TestGetProjectDailySessions(t *testing.T) {
 		// 空配列が返ることを確認
 		if len(sessionRows) != 0 {
 			t.Errorf("Expected 0 sessions, got %d", len(sessionRows))
+		}
+	})
+}
+
+func TestGetProjectDailySessions_CrossMidnight(t *testing.T) {
+	// テストデータベースの準備
+	db, _ := setupTestDB(t)
+	defer db.Close()
+
+	// テストプロジェクト作成
+	projectID, err := db.CreateProject("test-project", "/path/to/project")
+	if err != nil {
+		t.Fatalf("Failed to create project: %v", err)
+	}
+
+	// 跨日セッションのテストケース
+	sessions := []struct {
+		id           string
+		branch       string
+		startTime    time.Time
+		endTime      time.Time
+		inputTokens  int
+		outputTokens int
+	}{
+		{
+			// 1/20 23:00 → 1/21 02:00 (跨日セッション)
+			id:           "session-cross-midnight",
+			branch:       "main",
+			startTime:    time.Date(2026, 1, 20, 23, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 21, 2, 0, 0, 0, time.UTC),
+			inputTokens:  1000,
+			outputTokens: 500,
+		},
+		{
+			// 1/20 10:00 → 1/20 15:00 (同日セッション)
+			id:           "session-same-day",
+			branch:       "feature-a",
+			startTime:    time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 20, 15, 0, 0, 0, time.UTC),
+			inputTokens:  2000,
+			outputTokens: 1000,
+		},
+		{
+			// 1/20 10:00 → 1/22 15:00 (複数日にまたがるセッション)
+			id:           "session-multi-day",
+			branch:       "feature-b",
+			startTime:    time.Date(2026, 1, 20, 10, 0, 0, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 22, 15, 0, 0, 0, time.UTC),
+			inputTokens:  3000,
+			outputTokens: 1500,
+		},
+		{
+			// 1/20 23:59:59 → 1/21 00:00:01 (日付境界ぴったり)
+			id:           "session-boundary",
+			branch:       "main",
+			startTime:    time.Date(2026, 1, 20, 23, 59, 59, 0, time.UTC),
+			endTime:      time.Date(2026, 1, 21, 0, 0, 1, 0, time.UTC),
+			inputTokens:  500,
+			outputTokens: 250,
+		},
+	}
+
+	for _, s := range sessions {
+		duration := int(s.endTime.Sub(s.startTime).Seconds())
+		_, err := db.conn.Exec(`
+			INSERT INTO sessions (
+				id, project_id, git_branch, start_time, end_time, duration_seconds,
+				total_input_tokens, total_output_tokens,
+				total_cache_creation_tokens, total_cache_read_tokens,
+				error_count, first_user_message
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, s.id, projectID, s.branch,
+			s.startTime.Format(time.RFC3339Nano),
+			s.endTime.Format(time.RFC3339Nano),
+			duration,
+			s.inputTokens, s.outputTokens, 0, 0, 0, "test message")
+		if err != nil {
+			t.Fatalf("Failed to create session: %v", err)
+		}
+	}
+
+	t.Run("跨日セッションが両日に含まれる", func(t *testing.T) {
+		// 1/20の統計
+		sessions20, err := db.GetProjectDailySessions(projectID, "2026-01-20")
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 1/20には4つのセッションが含まれるはず
+		// - session-same-day (同日)
+		// - session-cross-midnight (跨日)
+		// - session-multi-day (複数日)
+		// - session-boundary (境界)
+		if len(sessions20) != 4 {
+			t.Errorf("Expected 4 sessions on 2026-01-20, got %d", len(sessions20))
+		}
+
+		// 1/21の統計
+		sessions21, err := db.GetProjectDailySessions(projectID, "2026-01-21")
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 1/21には3つのセッションが含まれるはず
+		// - session-cross-midnight (跨日)
+		// - session-multi-day (複数日)
+		// - session-boundary (境界)
+		if len(sessions21) != 3 {
+			t.Errorf("Expected 3 sessions on 2026-01-21, got %d", len(sessions21))
+		}
+
+		// セッションIDの確認
+		sessionIDs21 := make(map[string]bool)
+		for _, s := range sessions21 {
+			sessionIDs21[s.ID] = true
+		}
+
+		if !sessionIDs21["session-cross-midnight"] {
+			t.Error("session-cross-midnight should be included on 2026-01-21")
+		}
+		if !sessionIDs21["session-multi-day"] {
+			t.Error("session-multi-day should be included on 2026-01-21")
+		}
+		if !sessionIDs21["session-boundary"] {
+			t.Error("session-boundary should be included on 2026-01-21")
+		}
+		if sessionIDs21["session-same-day"] {
+			t.Error("session-same-day should NOT be included on 2026-01-21")
+		}
+	})
+
+	t.Run("複数日にまたがるセッションがすべての日に含まれる", func(t *testing.T) {
+		// 1/22の統計
+		sessions22, err := db.GetProjectDailySessions(projectID, "2026-01-22")
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		// 1/22には1つのセッションが含まれるはず
+		// - session-multi-day (複数日)
+		if len(sessions22) != 1 {
+			t.Errorf("Expected 1 session on 2026-01-22, got %d", len(sessions22))
+		}
+
+		if sessions22[0].ID != "session-multi-day" {
+			t.Errorf("Expected session-multi-day on 2026-01-22, got %s", sessions22[0].ID)
+		}
+	})
+
+	t.Run("同日セッションは該当日のみに含まれる", func(t *testing.T) {
+		// 1/21でsession-same-dayが含まれないことを確認
+		sessions21, err := db.GetProjectDailySessions(projectID, "2026-01-21")
+		if err != nil {
+			t.Fatalf("GetProjectDailySessions failed: %v", err)
+		}
+
+		for _, s := range sessions21 {
+			if s.ID == "session-same-day" {
+				t.Error("session-same-day should NOT be included on 2026-01-21")
+			}
 		}
 	})
 }
